@@ -1,10 +1,13 @@
 from flask import Flask, render_template, request, jsonify
 import os
 from werkzeug.utils import secure_filename
+import subprocess
+import openpyxl
+import io
 
 from excel_diff.excel_parser import ExcelParser
 from excel_diff.diff_engine import DiffEngine
-from excel_diff.git_reader import GitReader   # your existing reader
+from excel_diff.git_reader import GitReader 
 
 app = Flask(__name__)
 
@@ -45,10 +48,10 @@ def excel_diff():
         url = request.form.get("url_a")
 
         excel_a_path = GitReader.fetch_excel(
-            branch=branch,
-            path=path,
-            url=url,
-            target_dir=UPLOAD_FOLDER
+        branch=branch,
+        path=path,
+        url=url, # Currently ignored, assumes local repo
+        target_dir=UPLOAD_FOLDER
         )
 
     # -----------------------------
@@ -84,6 +87,10 @@ def excel_diff():
     data_a = parser_a.parse()
     data_b = parser_b.parse()
 
+    # Clean up files immediately to keep server light
+    if os.path.exists(excel_a_path): os.remove(excel_a_path)
+    if os.path.exists(excel_b_path): os.remove(excel_b_path)
+
     diff_engine = DiffEngine(data_a, data_b)
     diff_result = diff_engine.compare()
 
@@ -104,7 +111,21 @@ def excel_diff():
         excel_b_name=os.path.basename(excel_b_path),
     )
 
-
-
+@app.after_request
+def cleanup_temp_files(response):
+    # This runs after the HTML is sent to the user
+    try:
+        folder = app.config["UPLOAD_FOLDER"]
+        for filename in os.listdir(folder):
+            file_path = os.path.join(folder, filename)
+            # Only delete files older than 5 minutes to avoid deleting 
+            # files while another user is currently parsing them
+            import time
+            if os.path.isfile(file_path) and time.time() - os.path.getmtime(file_path) > 300:
+                os.remove(file_path)
+    except Exception as e:
+        print(f"Error during cleanup: {e}")
+    return response
+    
 if __name__ == "__main__":
     app.run(debug=True)
