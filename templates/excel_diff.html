@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Excel Diff Tool - Upload</title>
+
+<style>
+:root {
+    --excel-green: #217346;
+    --excel-green-dark: #1a5c38;
+    --bg: #f0f2f5;
+    --border: #d1d4d8;
+    --panel-bg: #ffffff;
+    --text-muted: #5f6368;
+}
+
+body {
+    /* Matching the font from your results page */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 30px;
+    background: var(--bg);
+    color: #333;
+}
+
+h1 {
+    margin: 0;
+    color: var(--excel-green);
+    font-weight: 400;
+    font-size: 28px;
+}
+
+.subtitle {
+    color: var(--text-muted);
+    margin-bottom: 30px;
+    font-size: 14px;
+}
+
+.diff-wrapper {
+    background: var(--panel-bg);
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.diff-panels {
+    display: flex;
+    gap: 25px;
+}
+
+.panel {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.panel:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.panel-header {
+    background: var(--excel-green);
+    color: white;
+    padding: 12px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+.panel-header h3 {
+    margin: 0;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.chevron {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+}
+
+.panel.collapsed .chevron {
+    transform: rotate(-90deg);
+}
+
+.panel-body {
+    padding: 20px;
+}
+
+.panel.collapsed .panel-body {
+    display: none;
+}
+
+/* TOGGLE BAR (Excel Green Theme) */
+.toggle-bar {
+    display: inline-flex;
+    background: #e9ecef;
+    border-radius: 20px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    padding: 3px;
+    border: 1px solid #ddd;
+}
+
+.toggle-btn {
+    padding: 6px 20px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 18px;
+    transition: all 0.2s;
+    color: #555;
+}
+
+.toggle-btn.active {
+    background: var(--excel-green);
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: block;
+    color: #444;
+}
+
+input[type="text"],
+input[type="file"] {
+    width: 100%;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    box-sizing: border-box;
+    font-size: 13px;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-color: var(--excel-green);
+    box-shadow: 0 0 0 2px rgba(33, 115, 70, 0.1);
+}
+
+.source-fields {
+    display: none;
+}
+
+.source-fields.active {
+    display: block;
+    animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.compare-container {
+    text-align: center;
+    margin-top: 40px;
+}
+
+.compare-btn {
+    padding: 14px 60px;
+    font-size: 16px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--excel-green), var(--excel-green-dark));
+    color: #fff;
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(33,115,70,0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.compare-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(33,115,70,0.4);
+}
+
+.compare-btn:active {
+    transform: translateY(0);
+}
+</style>
+
+<script>
+function togglePanel(panelId) {
+    document.getElementById(panelId).classList.toggle("collapsed");
+}
+
+function selectSource(side, type) {
+    document.querySelectorAll(`.${side}-source`).forEach(el =>
+        el.classList.remove("active")
+    );
+    document.getElementById(`${side}-${type}`).classList.add("active");
+
+    document.querySelectorAll(`.${side}-btn`).forEach(btn =>
+        btn.classList.remove("active")
+    );
+    document.getElementById(`${side}-btn-${type}`).classList.add("active");
+
+    document.getElementById(`source_${side}`).value = type;
+}
+</script>
+</head>
+
+<body>
+
+<div style="max-width: 1000px; margin: 0 auto;">
+    <h1>Excel Comparison Tool</h1>
+    <div class="subtitle">
+        Analyze differences between two workbooks from Git repositories or local storage.
+    </div>
+</div>
+
+<div class="diff-wrapper">
+<form method="POST" enctype="multipart/form-data" action="/excel-diff">
+
+    <input type="hidden" name="source_a" id="source_a" value="pc">
+    <input type="hidden" name="source_b" id="source_b" value="pc">
+
+    <div class="diff-panels">
+
+        <div class="panel" id="panelA">
+            <div class="panel-header" onclick="togglePanel('panelA')">
+                <h3>📁 Excel A (Source)</h3>
+                <span class="chevron">▼</span>
+            </div>
+
+            <div class="panel-body">
+                <div class="toggle-bar">
+                    <div class="toggle-btn a-btn active" id="a-btn-pc" onclick="selectSource('a','pc')">Local File</div>
+                    <div class="toggle-btn a-btn" id="a-btn-git" onclick="selectSource('a','git')">Git Repository</div>
+                </div>
+
+                <div class="source-fields a-source active" id="a-pc">
+                    <div class="form-group">
+                        <label>Select Workbook (.xlsx)</label>
+                        <input type="file" name="file_a" accept=".xlsx">
+                    </div>
+                </div>
+
+                <div class="source-fields a-source" id="a-git">
+                    <div class="form-group">
+                        <label>Branch Name</label>
+                        <input type="text" name="branch_a" placeholder="e.g. main">
+                    </div>
+                    <div class="form-group">
+                        <label>File Path in Repo</label>
+                        <input type="text" name="path_a" placeholder="folder/data.xlsx">
+                    </div>
+                    <div class="form-group">
+                        <label>Git URL (Optional)</label>
+                        <input type="text" name="url_a" placeholder="https://github.com/user/repo">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" id="panelB">
+            <div class="panel-header" onclick="togglePanel('panelB')">
+                <h3>📁 Excel B (Target)</h3>
+                <span class="chevron">▼</span>
+            </div>
+
+            <div class="panel-body">
+                <div class="toggle-bar">
+                    <div class="toggle-btn b-btn active" id="b-btn-pc" onclick="selectSource('b','pc')">Local File</div>
+                    <div class="toggle-btn b-btn" id="b-btn-git" onclick="selectSource('b','git')">Git Repository</div>
+                </div>
+
+                <div class="source-fields b-source active" id="b-pc">
+                    <div class="form-group">
+                        <label>Select Workbook (.xlsx)</label>
+                        <input type="file" name="file_b" accept=".xlsx">
+                    </div>
+                </div>
+
+                <div class="source-fields b-source" id="b-git">
+                    <div class="form-group">
+                        <label>Branch Name</label>
+                        <input type="text" name="branch_b" placeholder="e.g. develop">
+                    </div>
+                    <div class="form-group">
+                        <label>File Path in Repo</label>
+                        <input type="text" name="path_b" placeholder="folder/data_v2.xlsx">
+                    </div>
+                    <div class="form-group">
+                        <label>Git URL (Optional)</label>
+                        <input type="text" name="url_b" placeholder="https://github.com/user/repo">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="compare-container">
+        <button type="submit" class="compare-btn">Run Comparison</button>
+    </div>
+
+</form>
+</div>
+
+</body>
+</html>
