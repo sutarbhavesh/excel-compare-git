@@ -1,9 +1,6 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request
 import os
 from werkzeug.utils import secure_filename
-import subprocess
-import openpyxl
-import io
 
 from excel_diff.excel_parser import ExcelParser
 from excel_diff.diff_engine import DiffEngine
@@ -21,18 +18,13 @@ def excel_diff():
     if request.method == "GET":
         return render_template("excel_diff.html")
 
-    # -----------------------------
-    # Read form meta
-    # -----------------------------
     source_a = request.form.get("source_a", "pc")
     source_b = request.form.get("source_b", "pc")
 
     excel_a_path = None
     excel_b_path = None
 
-    # -----------------------------
     # Resolve Excel A
-    # -----------------------------
     if source_a == "pc":
         file_a = request.files.get("file_a")
         if not file_a or file_a.filename == "":
@@ -42,7 +34,7 @@ def excel_diff():
         excel_a_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file_a.save(excel_a_path)
 
-    else:  # Git source
+    else:  
         branch = request.form.get("branch_a")
         path = request.form.get("path_a")
         url = request.form.get("url_a")
@@ -50,13 +42,12 @@ def excel_diff():
         excel_a_path = GitReader.fetch_excel(
         branch=branch,
         path=path,
-        url=url, # Currently ignored, assumes local repo
+        url=url, 
         target_dir=UPLOAD_FOLDER
         )
 
-    # -----------------------------
+
     # Resolve Excel B
-    # -----------------------------
     if source_b == "pc":
         file_b = request.files.get("file_b")
         if not file_b or file_b.filename == "":
@@ -66,7 +57,7 @@ def excel_diff():
         excel_b_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file_b.save(excel_b_path)
 
-    else:  # Git source
+    else:  =
         branch = request.form.get("branch_b")
         path = request.form.get("path_b")
         url = request.form.get("url_b")
@@ -78,9 +69,7 @@ def excel_diff():
             target_dir=UPLOAD_FOLDER
         )
 
-    # -----------------------------
-    # Parse Excel files
-    # -----------------------------
+
     # Parse Excel files using your shared classes
     parser_a = ExcelParser(excel_a_path)
     parser_b = ExcelParser(excel_b_path)
@@ -94,7 +83,6 @@ def excel_diff():
     diff_engine = DiffEngine(data_a, data_b)
     diff_result = diff_engine.compare()
 
-    # Calculate stats for the summary dashboard
     stats = {"modified": 0, "added": 0, "deleted": 0}
     for sheet_name, sheet_data in diff_result.items():
         for row in sheet_data.get('rows', []):
@@ -113,7 +101,6 @@ def excel_diff():
 
 @app.after_request
 def cleanup_temp_files(response):
-    # This runs after the HTML is sent to the user
     try:
         folder = app.config["UPLOAD_FOLDER"]
         for filename in os.listdir(folder):

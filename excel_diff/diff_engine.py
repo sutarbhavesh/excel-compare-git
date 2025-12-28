@@ -1,5 +1,3 @@
-# excel_diff/diff_engine.py
-
 class DiffEngine:
     def __init__(self, excel_a: dict, excel_b: dict):
         self.excel_a = excel_a

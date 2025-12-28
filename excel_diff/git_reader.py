@@ -3,17 +3,12 @@ import os
 import shutil
 import time
 import stat
-import requests
-from typing import List, Optional
+from typing import Optional
 
 class GitReader:
-    """
-    Fast Git helper using HTTP requests for remote files to handle 2GB+ repos.
-    Falls back to local Git CLI for files already on the disk.
-    """
-
     @staticmethod
     def _handle_remove_readonly(func, path, excinfo):
+        """Forces the deletion of read-only files (standard in .git folders)."""
         os.chmod(path, stat.S_IWRITE)
         func(path)
 
@@ -23,37 +18,39 @@ class GitReader:
         filename = f"git_{branch}_{os.path.basename(normalized_path)}"
         save_path = os.path.join(target_dir, filename)
 
-        # --- CASE 1: REMOTE GITHUB (FAST REQUEST METHOD) ---
-        if url and "github.com" in url:
-            try:
-                # Convert GitHub Web URL to Raw URL
-                raw_url = url.replace("github.com", "raw.githubusercontent.com")
-                if raw_url.endswith(".git"):
-                    raw_url = raw_url[:-4]
-                
-                full_raw_path = f"{raw_url}/{branch}/{normalized_path}"
-
-                # Download only the specific file
-                response = requests.get(full_raw_path, timeout=15)
-                
-                if response.status_code == 200:
-                    with open(save_path, "wb") as f:
-                        f.write(response.content)
-                    return save_path
-                else:
-                    raise RuntimeError(f"GitHub Error {response.status_code}: Could not find file at {full_raw_path}")
-
-            except Exception as e:
-                raise RuntimeError(f"Network Error: {str(e)}")
-
-        # --- CASE 2: LOCAL REPOSITORY (GIT SHOW METHOD) ---
-        else:
+        if not url or not url.strip():
             repo_path = os.getcwd()
-            try:
-                cmd = ["git", "show", f"{branch}:{normalized_path}"]
-                process = subprocess.run(cmd, cwd=repo_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-                with open(save_path, "wb") as f:
-                    f.write(process.stdout)
-                return save_path
-            except Exception as e:
-                raise RuntimeError(f"Local Git Error: {str(e)}")
+            cmd = ["git", "show", f"{branch}:{normalized_path}"]
+            process = subprocess.run(cmd, cwd=repo_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            with open(save_path, "wb") as f:
+                f.write(process.stdout)
+            return save_path
+
+        unique_id = int(time.time() * 1000) 
+        temp_dir = os.path.abspath(os.path.join(target_dir, f"tmp_{unique_id}")).replace("\\", "/")
+        
+        try:
+            clone_cmd = [
+                "git", "clone", "--depth", "1", "--filter=blob:none", 
+                "--no-checkout", url, temp_dir
+            ]
+            subprocess.run(clone_cmd, check=True, capture_output=True)
+
+            show_cmd = ["git", "show", f"{branch}:{normalized_path}"]
+            show_proc = subprocess.run(show_cmd, cwd=temp_dir, stdout=subprocess.PIPE, check=True)
+
+            with open(save_path, "wb") as f:
+                f.write(show_proc.stdout)
+
+            return save_path
+
+        except Exception as e:
+            raise RuntimeError(f"Error accessing private repo: {str(e)}")
+        
+        finally:
+            if os.path.exists(temp_dir):
+                time.sleep(1) 
+                try:
+                    shutil.rmtree(temp_dir, onerror=GitReader._handle_remove_readonly)
+                except Exception:
+                    print(f"Cleanup deferred for {temp_dir}")

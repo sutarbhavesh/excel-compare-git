@@ -1,4 +1,3 @@
-# excel_diff/excel_parser.py
 
 import zipfile
 import xml.etree.ElementTree as ET
@@ -23,8 +22,6 @@ class ExcelParser:
             sheets = self._read_sheets(z, shared_strings)
 
         return sheets
-
-    # ---------------- Internal helpers ----------------
 
     def _read_shared_strings(self, z):
         try:
@@ -85,7 +82,6 @@ class ExcelParser:
                 rows_dict[row_idx][col_idx] = value
                 max_col = max(max_col, col_idx)
 
-        # Build final aligned grid
         rows = []
         max_row = max(rows_dict.keys(), default=-1)
 
