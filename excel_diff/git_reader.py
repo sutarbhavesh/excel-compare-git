@@ -15,7 +15,7 @@ class GitReader:
     @staticmethod
     def fetch_excel(branch: str, path: str, target_dir: str, url: Optional[str] = None) -> str:
         normalized_path = path.replace("\\", "/")
-        filename = f"git_{branch}_{os.path.basename(normalized_path)}"
+        filename = f"[Branch: {branch}] {os.path.basename(normalized_path)}"
         save_path = os.path.join(target_dir, filename)
 
         if not url or not url.strip():

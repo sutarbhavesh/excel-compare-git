@@ -57,7 +57,7 @@ def excel_diff():
         excel_b_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file_b.save(excel_b_path)
 
-    else:  =
+    else:  
         branch = request.form.get("branch_b")
         path = request.form.get("path_b")
         url = request.form.get("url_b")
