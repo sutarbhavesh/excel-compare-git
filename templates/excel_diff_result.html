@@ -102,7 +102,7 @@
         display: flex; 
         flex-direction: column;
     }
-    .file-pane:last-child { border-left: 4px solid var(--excel-green); }
+    .file-pane:last-child { border-left: 2px solid var(--excel-green); }
     
     .file-title { 
         background: #fafafa; 
@@ -301,12 +301,14 @@
                 <div class="file-scroll" onscroll="syncVertical(this)">
                     <table class="excel-table">
                         <tr class="col-header">
+                            <td class="embedded-idx">#</td>
                             {% if sheet.data %}{% for i in range(sheet.data.max_cols) %}
                             <td><script>document.write(getColLetter({{ loop.index }}))</script></td>
                             {% endfor %}{% endif %}
                         </tr>
                         {% if sheet.data %}{% for row in sheet.data.rows %}
                         <tr data-row-idx="{{ row.row_index }}">
+                            <td class="embedded-idx">{{ row.row_index }}</td>
                             {% for cell in row.cells %}<td class="{{ cell.status }}">{{ cell.b if cell.b is not none else "" }}</td>{% endfor %}
                         </tr>
                         {% endfor %}{% endif %}

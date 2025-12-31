@@ -92,7 +92,7 @@ h1 { margin: 0; color: var(--excel-green); font-weight: 400; font-size: 28px; }
 
 .alert-popup {
     padding: 15px;
-    background-color: #f44336; /* Red for errors */
+    background-color: #f44336;
     color: white;
     margin-bottom: 15px;
     border-radius: 8px;
@@ -150,13 +150,63 @@ input[type="text"], input[type="file"] {
     opacity: 0.6;
 }
 
-.error-text { color: #d93025; font-size: 11px; margin-top: 4px; display: none; }
+/* --- SPINNER STYLES --- */
+#loading-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    backdrop-filter: blur(3px);
+}
+
+.loading-hidden { display: none !important; }
+
+.spinner-container { text-align: center; }
+
+.excel-spinner {
+    width: 50px; height: 50px;
+    border: 5px solid #e1e1e1;
+    border-top: 5px solid var(--excel-green);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+.loading-text { font-size: 18px; font-weight: 500; color: #333; margin: 0; }
+.loading-subtext { font-size: 13px; color: #666; margin-top: 8px; }
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
 </style>
 
 <script>
 function togglePanel(panelId) {
     document.getElementById(panelId).classList.toggle("collapsed");
 }
+
+// Reset page when navigating back
+window.addEventListener('pageshow', function(event) {
+    const form = document.getElementById('uploadForm'); 
+    const overlay = document.getElementById('loading-overlay');
+    
+    if (form) {
+        form.reset(); 
+        // Hide overlay if it was stuck (e.g. from hitting Back button)
+        if (overlay) overlay.classList.add('loading-hidden');
+        
+        // Ensure UI toggles go back to 'Local File'
+        selectSource('a', 'pc');
+        selectSource('b', 'pc');
+    }
+    document.querySelectorAll('.file-custom-label').forEach(label => {
+        label.textContent = ''; 
+    });
+    validateForm();
+});
 
 function selectSource(side, type) {
     document.querySelectorAll(`.${side}-source`).forEach(el => el.classList.remove("active"));
@@ -196,17 +246,34 @@ function validateForm() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('uploadForm');
+    const overlay = document.getElementById('loading-overlay');
     const inputs = document.querySelectorAll('input');
+
     inputs.forEach(input => {
         input.addEventListener('input', validateForm);
         input.addEventListener('change', validateForm);
     });
+
+    // Show loading spinner on submit
+    form.addEventListener('submit', () => {
+        overlay.classList.remove('loading-hidden');
+    });
+
     validateForm();
 });
 </script>
 </head>
 
 <body>
+    <div id="loading-overlay" class="loading-hidden">
+        <div class="spinner-container">
+            <div class="excel-spinner"></div>
+            <p class="loading-text">Performing comparison...</p>
+            <p class="loading-subtext">Fetching data and analyzing sheets. Please wait.</p>
+        </div>
+    </div>
+
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
         <div id="flash-container">
@@ -219,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     {% endif %}
     {% endwith %}
+
 <div style="max-width: 1000px; margin: 0 auto;">
     <h1>Excel Comparison Tool</h1>
     <div class="subtitle">Analyze differences between two workbooks from Git repositories or local storage.</div>
