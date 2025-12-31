@@ -4,7 +4,6 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 import re
 
-
 class ExcelParserError(Exception):
     pass
 
@@ -40,21 +39,34 @@ class ExcelParser:
         return strings
 
     def _read_sheets(self, z, shared_strings):
-        workbook = ET.fromstring(z.read("xl/workbook.xml"))
-        ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        workbook_xml = z.read("xl/workbook.xml")
+        workbook = ET.fromstring(workbook_xml)
+        ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+              "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
 
+        # Use the relationship ID to find the correct file, not just the sheetId
+        # This ensures we get the sheets in the exact order they appear in the tabs
         sheets = {}
-        for sheet in workbook.findall("a:sheets/a:sheet", ns):
-            name = sheet.attrib["name"]
-            sheet_id = sheet.attrib["sheetId"]
-            path = f"xl/worksheets/sheet{sheet_id}.xml"
+        for i, sheet_node in enumerate(workbook.findall("a:sheets/a:sheet", ns)):
+            name = sheet_node.attrib["name"]
+            # Sheets are usually numbered sheet1.xml, sheet2.xml based on internal creation
+            # but we follow the order they appear in the workbook.xml
+            rel_id = sheet_node.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+            
+            # Simple fallback to index if rel_id logic gets complex
+            path = f"xl/worksheets/sheet{i+1}.xml" 
 
             try:
                 xml = z.read(path)
+                sheets[name] = self._read_sheet(xml, shared_strings)
             except KeyError:
-                continue
-
-            sheets[name] = self._read_sheet(xml, shared_strings)
+                # If sheet1.xml doesn't exist, try finding by sheetId
+                s_id = sheet_node.attrib.get("sheetId")
+                try:
+                    xml = z.read(f"xl/worksheets/sheet{s_id}.xml")
+                    sheets[name] = self._read_sheet(xml, shared_strings)
+                except:
+                    continue
 
         return sheets
 

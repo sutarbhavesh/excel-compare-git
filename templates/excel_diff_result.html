@@ -6,318 +6,320 @@
 <style>
     :root {
         --excel-green: #217346;
+        --excel-green-dark: #1a5c38;
         --border-color: #d1d4d8;
         --header-bg: #f3f3f3;
         --row-index-bg: #e6e6e6;
         --diff-red: #ffe7e7;
         --diff-red-text: #a94442;
+        --error-red: #d9534f;
+        --warning-orange: #e67e22;
+        --ui-green-text: #2c662d; 
     }
     * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; margin: 30px; color: #333; }
 
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; margin: 20px; color: #333; }
+    .main-title { font-size: 32px; font-weight: 400; color: var(--ui-green-text); margin-bottom: 5px; }
+    .main-subtitle { font-size: 14px; color: #666; margin-bottom: 30px; }
 
-    /* Dashboard Styling */
+    /* Navigation Bar */
+    .nav-container {
+        display: flex; justify-content: space-between; align-items: center;
+        background: white; padding: 10px 20px; border-radius: 8px; margin-bottom: 25px;
+        border: 1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .nav-left { display: flex; gap: 12px; }
+    .nav-right { display: flex; align-items: center; gap: 15px; }
+
+    .nav-btn {
+        background: var(--excel-green); color: white; border: none; padding: 8px 16px;
+        border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer;
+        display: flex; align-items: center; gap: 8px; transition: background 0.2s; text-decoration: none;
+    }
+    .nav-btn.secondary { background: #f0f2f5; color: #333; border: 1px solid var(--border-color); }
+    .nav-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+    /* Global Toggle Buttons */
+    .action-link {
+        font-size: 12px; color: var(--excel-green); cursor: pointer; text-decoration: underline; font-weight: 600;
+    }
+    .action-link:hover { color: var(--excel-green-dark); }
+    
+    .status-pill { font-size: 12px; color: #666; background: #eef1f4; padding: 4px 12px; border-radius: 20px; }
+
+    /* Summary Cards */
     .summary-container { display: flex; gap: 20px; margin-bottom: 25px; max-width: 1200px; }
     .stat-card {
         background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);
         flex: 1; text-align: center; border-top: 5px solid var(--excel-green);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .stat-card.clickable { cursor: pointer; border-top-color: #d9534f; transition: transform 0.2s; }
+    .stat-card.clickable { cursor: pointer; border-top-color: var(--error-red); transition: transform 0.2s; }
     .stat-card.clickable:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-    .stat-number { font-size: 28px; font-weight: bold; display: block; margin-bottom: 5px; }
-    .stat-label { font-size: 11px; text-transform: uppercase; color: #666; font-weight: 600; letter-spacing: 1px; }
+    .stat-number { font-size: 28px; font-weight: bold; display: block; margin-bottom: 5px; color: #333; }
+    .stat-label { font-size: 11px; text-transform: uppercase; color: #777; font-weight: 600; letter-spacing: 1px; }
 
-    /* Sheet Container */
+    /* Sheet UI */
     .sheet { background: #fff; border: 1px solid var(--border-color); margin-bottom: 30px; border-radius: 4px; overflow: hidden; }
     .sheet-header { padding: 12px 18px; background: var(--excel-green); color: white; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-    .sheet.collapsed .sheet-body { display: none; }
-    .diff-badge { background: #d9534f; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 10px; }
     
-    .compare-wrapper { display: flex; border: 1px solid var(--border-color); background: #fff; position: relative; }
+    /* Default Collapsed State */
+    .sheet.collapsed .sheet-body { display: none !important; }
+    
+    .sheet.mismatch { border: 2px solid var(--warning-orange); }
+    .sheet.mismatch .sheet-header { background: var(--warning-orange); }
+    
+    .diff-badge { background: var(--error-red); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 10px; font-weight: bold; }
+    .badge-black { background: #333 !important; }
 
-    .row-pane { width: 45px; background: var(--row-index-bg); border-right: 1px solid var(--border-color); flex-shrink: 0; }
-    .row-pane table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    
-    /* Dynamic Cell Height with Wrap Support */
-    .excel-table td, .row-pane td { 
-        border: 1px solid var(--border-color); 
-        padding: 5px 10px; 
-        font-size: 13px; 
-        vertical-align: top;
-        white-space: normal;       /* Enable Wrapping */
-        word-break: break-word;    /* Break long strings */
-        height: auto;              /* Grow with content */
-        min-height: 28px;
+    /* FIXED: Comparison wrapper with proper flex heights */
+    .compare-wrapper { 
+        display: flex; 
+        width: 100%; 
+        border-top: 1px solid var(--border-color); 
+        background: #fff;
+        min-height: 400px; 
+        max-height: 70vh;
     }
-
-    .row-pane td { 
+    
+    /* MODIFIED: Embedded row index style */
+    .embedded-idx { 
+        width: 45px !important; 
+        min-width: 45px !important;
+        background: var(--row-index-bg) !important; 
+        border-right: 1px solid var(--border-color) !important; 
+        text-align: center;
+        font-size: 11px;
+        color: #666;
+        position: sticky;
+        left: 0;
+        z-index: 5;
+    }
+    
+    .file-pane { 
+        flex: 1; 
+        min-width: 0; 
+        display: flex; 
+        flex-direction: column;
+    }
+    .file-pane:last-child { border-left: 4px solid var(--excel-green); }
+    
+    .file-title { 
+        background: #fafafa; 
+        padding: 8px; 
+        font-weight: bold; 
+        font-size: 12px; 
         text-align: center; 
-        font-size: 11px; 
-        color: #666; 
-        background: var(--row-index-bg);
+        border-bottom: 1px solid var(--border-color); 
+        color: #555; 
+        flex-shrink: 0;
+        height: 35px;
     }
-
-    /* Data Panes */
-    .file-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .file-title { background: #fafafa; padding: 8px; font-weight: bold; font-size: 13px; text-align: center; border-bottom: 1px solid var(--border-color); height: 31px; }
     
-    .file-scroll, .row-scroll { max-height: 500px; overflow: auto; }
-    .row-scroll { overflow: hidden; } 
+    .file-scroll { 
+        flex: 1; 
+        overflow: auto;
+        min-height: 0; 
+    }
     
     .excel-table { border-collapse: collapse; table-layout: fixed; width: max-content; }
-    .excel-table td { width: 200px; min-width: 150px; }
+    .excel-table td { border: 1px solid var(--border-color); padding: 5px 10px; font-size: 13px; vertical-align: top; height: 30px; width: 180px; min-width: 120px; }
 
-    .col-header td { 
-        background: var(--header-bg); 
-        text-align: center; 
-        color: #666; 
-        font-size: 11px; 
-        position: sticky; 
-        top: 0; 
-        z-index: 10; 
-        height: 25px !important;
-        white-space: nowrap; 
-    }
-
-    .bottom-spacer { height: 45px !important; border: none !important; background: transparent !important; }
-    .bottom-spacer td { border: none !important; background: transparent !important; height: 45px !important; }
-
-    .master-scroll-container {
-        height: 18px; background: #f9f9f9; overflow-x: auto; overflow-y: hidden;
-        border-top: 1px solid var(--border-color); margin-left: 45px;
-    }
-    .master-scroll-content { height: 1px; }
+    .col-header td { background: var(--header-bg); text-align: center; color: #666; font-size: 11px; position: sticky; top: 0; z-index: 10; height: 25px !important; }
+    .col-header .embedded-idx { z-index: 11; }
 
     .modified { background: var(--diff-red) !important; font-weight: bold; color: var(--diff-red-text); }
-    .added    { background: #e6ffed !important; color: #22863a; }
-    .deleted  { background: #f6f8fa !important; color: #999; text-decoration: line-through; }
+    .added { background: #e6ffed !important; color: #22863a; }
+    .deleted { background: #f6f8fa !important; color: #999; text-decoration: line-through; }
     .row-hidden { display: none !important; }
 
-    .file-scroll::-webkit-scrollbar, .master-scroll-container::-webkit-scrollbar { height: 12px; width: 12px; }
-    .file-scroll::-webkit-scrollbar-thumb, .master-scroll-container::-webkit-scrollbar-thumb { 
-        background: #ccc; border-radius: 10px; border: 3px solid transparent; background-clip: content-box;
-    }
+    .master-scroll-container { height: 18px; background: #f9f9f9; overflow-x: auto; border-top: 1px solid var(--border-color); }
+    .master-scroll-content { height: 1px; }
 </style>
 
 <script>
     function getColLetter(n) {
-        let s = "";
-        while (n > 0) {
-            let m = (n - 1) % 26;
-            s = String.fromCharCode(65 + m) + s;
-            n = Math.floor((n - 1) / 26);
-        }
-        return s;
+        let s = ""; while (n > 0) { let m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s;
     }
 
-    function syncRowHeights() {
-        const sheetBodies = document.querySelectorAll('.sheet-body:not(.collapsed)');
-        sheetBodies.forEach(body => {
-            const rows = body.querySelectorAll('tr[data-row-idx]:not(.row-hidden)');
-            const rowGroups = {};
-
-            rows.forEach(tr => {
-                const idx = tr.dataset.rowIdx;
-                if (!rowGroups[idx]) rowGroups[idx] = [];
-                rowGroups[idx].push(tr);
-            });
-
-            Object.values(rowGroups).forEach(group => { group.forEach(tr => { tr.style.height = 'auto'; });
-                let maxHeight = 0;
-                group.forEach(tr => { if (tr.offsetHeight > maxHeight) maxHeight = tr.offsetHeight; });
-                group.forEach(tr => { tr.style.height = maxHeight + 'px'; });
-            });
+    function syncVertical(el) {
+        const body = el.closest('.sheet-body');
+        const panes = body.querySelectorAll('.file-scroll');
+        requestAnimationFrame(() => {
+            panes.forEach(p => { if (p !== el) p.scrollTop = el.scrollTop; });
         });
     }
 
-    function syncVerticalOnly(el) {
-        const wrapper = el.closest('.sheet-body');
-        const panes = wrapper.querySelectorAll('.file-scroll');
-        const rowGutter = wrapper.querySelector('.row-scroll');
-        panes.forEach(p => { if (p !== el) p.scrollTop = el.scrollTop; });
-        if(rowGutter) rowGutter.scrollTop = el.scrollTop;
-    }
-
-    function masterSyncHorizontal(masterEl) {
+    function syncHorizontal(masterEl) {
         const body = masterEl.closest('.sheet-body');
         const panes = body.querySelectorAll('.file-scroll');
-        panes.forEach(p => { p.scrollLeft = masterEl.scrollLeft; });
-    }
-
-    function toggleDiffView(checkbox) {
-        const sheetBody = checkbox.closest('.sheet-body');
-        const rows = sheetBody.querySelectorAll('tr[data-row-idx]');
-        const groups = {};
-        rows.forEach(r => { 
-            const idx = r.dataset.rowIdx; 
-            if(!groups[idx]) groups[idx] = []; 
-            groups[idx].push(r); 
+        const scrollRatio = masterEl.scrollLeft / (masterEl.scrollWidth - masterEl.clientWidth);
+        panes.forEach(p => {
+            const maxScroll = p.scrollWidth - p.clientWidth;
+            p.scrollLeft = scrollRatio * maxScroll;
         });
-        Object.keys(groups).forEach(idx => {
-            const group = groups[idx];
-            const hasDiff = group.some(r => r.querySelector('.modified, .added, .deleted'));
-            group.forEach(r => {
-                if (checkbox.checked && !hasDiff) r.classList.add('row-hidden');
-                else r.classList.remove('row-hidden');
-            });
-        });
-        syncRowHeights();
-        updateMasterScrollWidth(sheetBody);
     }
 
-    function updateMasterScrollWidth(sheetBody) {
-        const tables = sheetBody.querySelectorAll('.excel-table');
-        const masterContent = sheetBody.querySelector('.master-scroll-content');
-        if (tables.length > 0 && masterContent) {
-            let maxWidth = 0;
-            tables.forEach(t => { if(t.offsetWidth > maxWidth) maxWidth = t.offsetWidth; });
-            masterContent.style.width = maxWidth + "px";
-        }
-    }
-
-    function toggleSheet(el) { 
+    function toggleSheet(el, forceState = null) { 
         const sheet = el.closest('.sheet');
-        sheet.classList.toggle("collapsed");
+        if (forceState === 'expand') {
+            sheet.classList.remove("collapsed");
+        } else if (forceState === 'collapse') {
+            sheet.classList.add("collapsed");
+        } else {
+            sheet.classList.toggle("collapsed");
+        }
         if (!sheet.classList.contains("collapsed")) {
-            setTimeout(() => {
-                updateMasterScrollWidth(sheet.querySelector('.sheet-body'));
-                syncRowHeights();
-            }, 10);
+            const body = sheet.querySelector('.sheet-body');
+            const table = body.querySelector('.excel-table');
+            if (table) {
+                body.querySelector('.master-scroll-content').style.width = (table.offsetWidth * 1.1) + "px";
+            }
         }
     }
 
-    function scrollToDiffs() {
-        const firstDiffSheet = document.querySelector('.sheet[data-has-diff="true"]');
-        if (firstDiffSheet) {
-            document.querySelectorAll('.sheet[data-has-diff="true"]').forEach(s => s.classList.remove('collapsed'));
-            firstDiffSheet.scrollIntoView({ behavior: 'smooth' });
-            setTimeout(syncRowHeights, 100);
+    function globalToggle(state) {
+        const headers = document.querySelectorAll('.sheet-header');
+        headers.forEach(header => { toggleSheet(header, state); });
+    }
+
+    function expandAllDiffs() {
+        const diffSheets = document.querySelectorAll('.sheet[data-has-diff="true"]');
+        diffSheets.forEach(sheet => { toggleSheet(sheet.querySelector('.sheet-header'), 'expand'); });
+        if (diffSheets.length > 0) {
+            diffSheets[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
 
-    window.onload = () => {
-        document.querySelectorAll('.sheet-body:not(.collapsed)').forEach(body => {
-            updateMasterScrollWidth(body);
+    function toggleDiffs(cb) {
+        const body = cb.closest('.sheet-body');
+        const rows = body.querySelectorAll('tr[data-row-idx]');
+        const groups = {};
+        rows.forEach(r => {
+            const id = r.dataset.rowIdx;
+            if(!groups[id]) groups[id] = [];
+            groups[id].push(r);
         });
-        syncRowHeights();
-    };
+        Object.values(groups).forEach(group => {
+            const hasChange = group.some(r => r.querySelector('.modified, .added, .deleted'));
+            group.forEach(r => r.classList.toggle('row-hidden', cb.checked && !hasChange));
+        });
+    }
 </script>
 </head>
 <body>
 
-<h1>Excel Comparison Result</h1>
+<div class="main-title">Excel Comparison Result</div>
+<br>
+<div class="nav-container">
+    <div class="nav-left">
+        <a href="/" class="nav-btn">Compare New Files</a>
+        <button class="nav-btn secondary" onclick="location.reload()">🔄 Refresh Results</button>
+    </div>
+    <div class="nav-right">
+        <span class="action-link" onclick="globalToggle('expand')">Expand All</span>
+        <span style="color: #ccc;">|</span>
+        <span class="action-link" onclick="globalToggle('collapse')">Collapse All</span>
+        <span class="status-pill">Last Updated: <span id="timestamp"></span></span>
+    </div>
+    <script>document.getElementById('timestamp').innerText = new Date().toLocaleTimeString();</script>
+</div>
 
 <div class="summary-container">
     <div class="stat-card">
-        <span class="stat-number">{{ diff.keys()|length }}</span>
+        <span class="stat-number">{{ diff|length }}</span>
         <span class="stat-label">Total Sheets</span>
     </div>
-    
     <div class="stat-card">
         <span class="stat-number">
-            {% set total_rows_ns = namespace(count=0) %}
-            {% for sname, sdata in diff.items() %}
-                {% set total_rows_ns.count = total_rows_ns.count + sdata.rows|length %}
-            {% endfor %}
-            {{ total_rows_ns.count }}
+            {% set total_rows = namespace(val=0) %}
+            {% for s in diff %}{% if s.data %}{% set total_rows.val = total_rows.val + s.data.rows|length %}{% endif %}{% endfor %}
+            {{ total_rows.val }}
         </span>
-        <span class="stat-label">Total Rows Scanned</span>
+        <span class="stat-label">Rows Scanned</span>
     </div>
-
-    <div class="stat-card clickable" onclick="scrollToDiffs()">
-        <span class="stat-number" style="color: #d9534f;">{{ total_diffs }}</span>
-        <span class="stat-label">Differences Found (Click to view)</span>
+    <div class="stat-card clickable" onclick="expandAllDiffs()">
+        <span class="stat-number" style="color: var(--error-red);">{{ total_diffs }}</span>
+        <span class="stat-label">Total Changes Found</span>
     </div>
 </div>
 
-{% for sheet_name, sheet_data in diff.items() %}
-    {% set sheet_diff_ns = namespace(count=0) %}
-    {% for row in sheet_data.rows %}
-        {% for cell in row.cells %}
-            {% if cell.status in ['modified', 'added', 'deleted'] %}
-                {% set sheet_diff_ns.count = sheet_diff_ns.count + 1 %}
-            {% endif %}
+{% for sheet in diff %}
+    {% set sheet_changes = namespace(count=0) %}
+    {% if sheet.data %}
+        {% for row in sheet.data.rows %}
+            {% set row_has_diff = namespace(yes=false) %}
+            {% for cell in row.cells %}
+                {% if cell.status != 'equal' %}
+                    {% if cell.a or cell.b %} {% set row_has_diff.yes = true %} {% endif %}
+                {% endif %}
+            {% endfor %}
+            {% if row_has_diff.yes %}{% set sheet_changes.count = sheet_changes.count + 1 %}{% endif %}
         {% endfor %}
-    {% endfor %}
+    {% endif %}
 
-<div class="sheet {{ 'collapsed' if sheet_diff_ns.count == 0 }}" data-has-diff="{{ 'true' if sheet_diff_ns.count > 0 else 'false' }}">
+<div class="sheet {{ 'mismatch' if not sheet.is_match }} collapsed" data-has-diff="{{ 'true' if sheet_changes.count > 0 else 'false' }}">
     <div class="sheet-header" onclick="toggleSheet(this)">
         <div>
-            <span>📊 {{ sheet_name }}</span>
-            {% if sheet_diff_ns.count > 0 %}
-            <span class="diff-badge">{{ sheet_diff_ns.count }} changes</span>
-            {% endif %}
+            <span>📊 {{ sheet.name_a if sheet.name_a else 'MISSING' }} ↔ {{ sheet.name_b if sheet.name_b else 'MISSING' }}</span>
+            {% if not sheet.is_match %}<span class="diff-badge badge-black">⚠️ SHEET NAME MISMATCH</span>{% endif %}
+            {% if sheet_changes.count > 0 %}<span class="diff-badge">{{ sheet_changes.count }} changes</span>{% endif %}
         </div>
-        <span>{{ sheet_data.rows|length }} Rows ▼</span>
+        <span>{{ sheet.data.rows|length if sheet.data else 0 }} Rows ▼</span>
     </div>
-    
+
     <div class="sheet-body">
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px; padding-top: 10px; padding-right: 10px;">
+        <div style="display: flex; justify-content: flex-end; padding: 10px;">
             <label style="background: var(--excel-green); color:white; padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer;">
-                <input type="checkbox" onchange="toggleDiffView(this)"> Show Changes Only
+                <input type="checkbox" onchange="toggleDiffs(this)"> Show Changes Only
             </label>
         </div>
 
         <div class="compare-wrapper">
-            <div class="row-pane">
-                <div style="height: 57px; background: var(--header-bg); border-bottom: 1px solid var(--border-color);"></div>
-                <div class="row-scroll">
-                    <table>
-                        {% for row in sheet_data.rows %}
-                        <tr data-row-idx="{{ loop.index }}"><td>{{ loop.index }}</td></tr>
-                        {% endfor %}
-                        <tr class="bottom-spacer"><td></td></tr>
+            <div class="file-pane">
+                <div class="file-title">📁 {{ excel_a_name }}</div>
+                <div class="file-scroll" onscroll="syncVertical(this)">
+                    <table class="excel-table">
+                        <tr class="col-header">
+                            <td class="embedded-idx">#</td>
+                            {% if sheet.data %}{% for i in range(sheet.data.max_cols) %}
+                            <td><script>document.write(getColLetter({{ loop.index }}))</script></td>
+                            {% endfor %}{% endif %}
+                        </tr>
+                        {% if sheet.data %}{% for row in sheet.data.rows %}
+                        <tr data-row-idx="{{ row.row_index }}">
+                            <td class="embedded-idx">{{ row.row_index }}</td>
+                            {% for cell in row.cells %}<td class="{{ cell.status }}">{{ cell.a if cell.a is not none else "" }}</td>{% endfor %}
+                        </tr>
+                        {% endfor %}{% endif %}
                     </table>
                 </div>
             </div>
 
             <div class="file-pane">
-                <div class="file-title">📁 {{ excel_a_name }}</div>
-                <div class="file-scroll" onscroll="syncVerticalOnly(this)">
-                    <table class="excel-table">
-                        <tr class="col-header">
-                            {% for i in range(sheet_data.max_cols) %}
-                            <td><script>document.write(getColLetter({{ loop.index }}))</script></td>
-                            {% endfor %}
-                        </tr>
-                        {% for row in sheet_data.rows %}
-                        <tr data-row-idx="{{ loop.index }}">
-                            {% for cell in row.cells %}
-                            <td class="{{ cell.status }}">{{ cell.a if cell.a is not none else "" }}</td>
-                            {% endfor %}
-                        </tr>
-                        {% endfor %}
-                    </table>
-                </div>
-            </div>
-
-            <div class="file-pane" style="border-left: 4px solid var(--excel-green);">
                 <div class="file-title">📁 {{ excel_b_name }}</div>
-                <div class="file-scroll" onscroll="syncVerticalOnly(this)">
+                <div class="file-scroll" onscroll="syncVertical(this)">
                     <table class="excel-table">
                         <tr class="col-header">
-                            {% for i in range(sheet_data.max_cols) %}
+                            {% if sheet.data %}{% for i in range(sheet.data.max_cols) %}
                             <td><script>document.write(getColLetter({{ loop.index }}))</script></td>
-                            {% endfor %}
+                            {% endfor %}{% endif %}
                         </tr>
-                        {% for row in sheet_data.rows %}
-                        <tr data-row-idx="{{ loop.index }}">
-                            {% for cell in row.cells %}
-                            <td class="{{ cell.status }}">{{ cell.b if cell.b is not none else "" }}</td>
-                            {% endfor %}
+                        {% if sheet.data %}{% for row in sheet.data.rows %}
+                        <tr data-row-idx="{{ row.row_index }}">
+                            {% for cell in row.cells %}<td class="{{ cell.status }}">{{ cell.b if cell.b is not none else "" }}</td>{% endfor %}
                         </tr>
-                        {% endfor %}
+                        {% endfor %}{% endif %}
                     </table>
                 </div>
             </div>
         </div>
 
-        <div class="master-scroll-container" onscroll="masterSyncHorizontal(this)">
+        <div class="master-scroll-container" onscroll="syncHorizontal(this)">
             <div class="master-scroll-content"></div>
         </div>
     </div>
 </div>
 {% endfor %}
-
 </body>
 </html>

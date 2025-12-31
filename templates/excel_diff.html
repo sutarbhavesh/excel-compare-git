@@ -12,6 +12,7 @@
     --border: #d1d4d8;
     --panel-bg: #ffffff;
     --text-muted: #5f6368;
+    --disabled-grey: #a0a0a0;
 }
 
 body {
@@ -22,18 +23,8 @@ body {
     color: #333;
 }
 
-h1 {
-    margin: 0;
-    color: var(--excel-green);
-    font-weight: 400;
-    font-size: 28px;
-}
-
-.subtitle {
-    color: var(--text-muted);
-    margin-bottom: 30px;
-    font-size: 14px;
-}
+h1 { margin: 0; color: var(--excel-green); font-weight: 400; font-size: 28px; }
+.subtitle { color: var(--text-muted); margin-bottom: 30px; font-size: 14px; }
 
 .diff-wrapper {
     background: var(--panel-bg);
@@ -44,10 +35,7 @@ h1 {
     margin: 0 auto;
 }
 
-.diff-panels {
-    display: flex;
-    gap: 25px;
-}
+.diff-panels { display: flex; gap: 25px; }
 
 .panel {
     flex: 1;
@@ -55,10 +43,6 @@ h1 {
     border-radius: 6px;
     overflow: hidden;
     transition: box-shadow 0.2s;
-}
-
-.panel:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 .panel-header {
@@ -71,37 +55,16 @@ h1 {
     cursor: pointer;
 }
 
-.panel-header h3 {
-    margin: 0;
-    font-size: 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
+.panel-header h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 10px; }
+.chevron { font-size: 12px; transition: transform 0.3s ease; }
+.panel.collapsed .chevron { transform: rotate(-90deg); }
+.panel-body { padding: 20px; }
+.panel.collapsed .panel-body { display: none; }
 
-.chevron {
-    font-size: 12px;
-    transition: transform 0.3s ease;
-}
-
-.panel.collapsed .chevron {
-    transform: rotate(-90deg);
-}
-
-.panel-body {
-    padding: 20px;
-}
-
-.panel.collapsed .panel-body {
-    display: none;
-}
-
-/* TOGGLE BAR (Excel Green Theme) */
 .toggle-bar {
     display: inline-flex;
     background: #e9ecef;
     border-radius: 20px;
-    overflow: hidden;
     margin-bottom: 20px;
     padding: 3px;
     border: 1px solid #ddd;
@@ -120,23 +83,38 @@ h1 {
 .toggle-btn.active {
     background: var(--excel-green);
     color: #fff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.form-group {
+#flash-container {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.alert-popup {
+    padding: 15px;
+    background-color: #f44336; /* Red for errors */
+    color: white;
     margin-bottom: 15px;
+    border-radius: 8px;
+    font-family: sans-serif;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    border-left: 8px solid #b71c1c;
 }
 
-label {
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 6px;
-    display: block;
-    color: #444;
+.close-btn {
+    position: absolute;
+    right: 15px;
+    top: 10px;
+    cursor: pointer;
+    font-size: 20px;
+    font-weight: bold;
 }
 
-input[type="text"],
-input[type="file"] {
+.form-group { margin-bottom: 15px; }
+label { font-size: 12px; font-weight: 600; margin-bottom: 6px; display: block; color: #444; }
+
+input[type="text"], input[type="file"] {
     width: 100%;
     padding: 10px;
     border-radius: 4px;
@@ -145,30 +123,12 @@ input[type="file"] {
     font-size: 13px;
 }
 
-input[type="text"]:focus {
-    outline: none;
-    border-color: var(--excel-green);
-    box-shadow: 0 0 0 2px rgba(33, 115, 70, 0.1);
-}
+.source-fields { display: none; }
+.source-fields.active { display: block; animation: fadeIn 0.3s; }
 
-.source-fields {
-    display: none;
-}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
-.source-fields.active {
-    display: block;
-    animation: fadeIn 0.3s;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.compare-container {
-    text-align: center;
-    margin-top: 40px;
-}
+.compare-container { text-align: center; margin-top: 40px; }
 
 .compare-btn {
     padding: 14px 60px;
@@ -180,17 +140,17 @@ input[type="text"]:focus {
     border-radius: 30px;
     cursor: pointer;
     box-shadow: 0 4px 15px rgba(33,115,70,0.3);
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: all 0.3s ease;
 }
 
-.compare-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(33,115,70,0.4);
+.compare-btn:disabled {
+    background: var(--disabled-grey);
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.6;
 }
 
-.compare-btn:active {
-    transform: translateY(0);
-}
+.error-text { color: #d93025; font-size: 11px; margin-top: 4px; display: none; }
 </style>
 
 <script>
@@ -199,44 +159,83 @@ function togglePanel(panelId) {
 }
 
 function selectSource(side, type) {
-    document.querySelectorAll(`.${side}-source`).forEach(el =>
-        el.classList.remove("active")
-    );
+    document.querySelectorAll(`.${side}-source`).forEach(el => el.classList.remove("active"));
     document.getElementById(`${side}-${type}`).classList.add("active");
 
-    document.querySelectorAll(`.${side}-btn`).forEach(btn =>
-        btn.classList.remove("active")
-    );
+    document.querySelectorAll(`.${side}-btn`).forEach(btn => btn.classList.remove("active"));
     document.getElementById(`${side}-btn-${type}`).classList.add("active");
 
     document.getElementById(`source_${side}`).value = type;
+    validateForm(); 
 }
+
+function validateForm() {
+    const btn = document.getElementById('submit-btn');
+    const sides = ['a', 'b'];
+    let isAllValid = true;
+
+    sides.forEach(side => {
+        const type = document.getElementById(`source_${side}`).value;
+        if (type === 'pc') {
+            const fileInput = document.querySelector(`input[name="file_${side}"]`);
+            if (!fileInput.files.length || !fileInput.files[0].name.toLowerCase().endsWith('.xlsx')) {
+                isAllValid = false;
+            }
+        } else {
+            const branch = document.querySelector(`input[name="branch_${side}"]`).value.trim();
+            const path = document.querySelector(`input[name="path_${side}"]`).value.trim();
+            const url = document.querySelector(`input[name="url_${side}"]`).value.trim();
+            
+            if (!branch || !url || !path || !path.toLowerCase().endsWith('.xlsx')) {
+                isAllValid = false;
+            }
+        }
+    });
+
+    btn.disabled = !isAllValid;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const inputs = document.querySelectorAll('input');
+    inputs.forEach(input => {
+        input.addEventListener('input', validateForm);
+        input.addEventListener('change', validateForm);
+    });
+    validateForm();
+});
 </script>
 </head>
 
 <body>
-
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div id="flash-container">
+        {% for category, message in messages %}
+            <div class="alert-popup {{ category }}">
+            <strong>Wait!</strong> {{ message }}
+            <span class="close-btn" onclick="this.parentElement.style.display='none';">&times;</span>
+            </div>
+        {% endfor %}
+        </div>
+    {% endif %}
+    {% endwith %}
 <div style="max-width: 1000px; margin: 0 auto;">
     <h1>Excel Comparison Tool</h1>
-    <div class="subtitle">
-        Analyze differences between two workbooks from Git repositories or local storage.
-    </div>
+    <div class="subtitle">Analyze differences between two workbooks from Git repositories or local storage.</div>
 </div>
 
 <div class="diff-wrapper">
-<form method="POST" enctype="multipart/form-data" action="/excel-diff">
+<form method="POST" enctype="multipart/form-data" action="/" id="uploadForm">
 
     <input type="hidden" name="source_a" id="source_a" value="pc">
     <input type="hidden" name="source_b" id="source_b" value="pc">
 
     <div class="diff-panels">
-
         <div class="panel" id="panelA">
             <div class="panel-header" onclick="togglePanel('panelA')">
                 <h3>📁 Excel A (Source)</h3>
                 <span class="chevron">▼</span>
             </div>
-
             <div class="panel-body">
                 <div class="toggle-bar">
                     <div class="toggle-btn a-btn active" id="a-btn-pc" onclick="selectSource('a','pc')">Local File</div>
@@ -252,15 +251,15 @@ function selectSource(side, type) {
 
                 <div class="source-fields a-source" id="a-git">
                     <div class="form-group">
-                        <label>Branch Name</label>
+                        <label>Branch Name *</label>
                         <input type="text" name="branch_a" placeholder="e.g. main">
                     </div>
                     <div class="form-group">
-                        <label>File Path in Repo</label>
+                        <label>File Path in Repo (.xlsx only) *</label>
                         <input type="text" name="path_a" placeholder="folder/data.xlsx">
                     </div>
                     <div class="form-group">
-                        <label>Git URL</label>
+                        <label>Git URL *</label>
                         <input type="text" name="url_a" placeholder="https://github.com/user/repo">
                     </div>
                 </div>
@@ -272,7 +271,6 @@ function selectSource(side, type) {
                 <h3>📁 Excel B (Target)</h3>
                 <span class="chevron">▼</span>
             </div>
-
             <div class="panel-body">
                 <div class="toggle-bar">
                     <div class="toggle-btn b-btn active" id="b-btn-pc" onclick="selectSource('b','pc')">Local File</div>
@@ -288,25 +286,24 @@ function selectSource(side, type) {
 
                 <div class="source-fields b-source" id="b-git">
                     <div class="form-group">
-                        <label>Branch Name</label>
+                        <label>Branch Name *</label>
                         <input type="text" name="branch_b" placeholder="e.g. develop">
                     </div>
                     <div class="form-group">
-                        <label>File Path in Repo</label>
+                        <label>File Path in Repo (.xlsx only) *</label>
                         <input type="text" name="path_b" placeholder="folder/data_v2.xlsx">
                     </div>
                     <div class="form-group">
-                        <label>Git URL</label>
+                        <label>Git URL *</label>
                         <input type="text" name="url_b" placeholder="https://github.com/user/repo">
                     </div>
                 </div>
             </div>
         </div>
-
     </div>
 
     <div class="compare-container">
-        <button type="submit" class="compare-btn">Run Comparison</button>
+        <button type="submit" class="compare-btn" id="submit-btn" disabled>Run Comparison</button>
     </div>
 
 </form>

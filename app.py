@@ -1,118 +1,160 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, abort, flash, redirect, url_for
 import os
+import time
+import logging
+import traceback
+import uuid
+import shutil 
 from werkzeug.utils import secure_filename
 
+# Importing your internal logic
 from excel_diff.excel_parser import ExcelParser
 from excel_diff.diff_engine import DiffEngine
 from excel_diff.git_reader import GitReader 
 
 app = Flask(__name__)
+app.secret_key = "super_secret_key_for_flash_messages" 
 
-UPLOAD_FOLDER = "uploads/temp"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+# --- LOGGING SETUP ---
+LOG_FOLDER = "logs"
+os.makedirs(LOG_FOLDER, exist_ok=True)
+log_format = (
+    "\n" + "#"*80 + "\n"
+    "TIMESTAMP: %(asctime)s\n"
+    "ERROR TYPE: %(levelname)s\n"
+    "MESSAGE: %(message)s\n"
+    "#"*80 + "\n"
+)
 
+logging.basicConfig(
+    filename=os.path.join(LOG_FOLDER, 'app_error.log'),
+    level=logging.ERROR,
+    format=log_format
+)
 
-@app.route("/excel-diff", methods=["GET", "POST"])
+# SECURITY: Limit maximum upload size to 16MB
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+# Base directory for all temporary uploads
+BASE_UPLOAD_FOLDER = "uploads/temp"
+os.makedirs(BASE_UPLOAD_FOLDER, exist_ok=True)
+app.config["UPLOAD_FOLDER"] = os.path.abspath(BASE_UPLOAD_FOLDER)
+
+@app.route("/", methods=["GET", "POST"])
 def excel_diff():
     if request.method == "GET":
         return render_template("excel_diff.html")
 
-    source_a = request.form.get("source_a", "pc")
-    source_b = request.form.get("source_b", "pc")
+    # 1. Create a unique folder for THIS specific request/tab
+    request_id = str(uuid.uuid4())
+    request_folder = os.path.join(app.config["UPLOAD_FOLDER"], request_id)
+    os.makedirs(request_folder, exist_ok=True)
 
     excel_a_path = None
     excel_b_path = None
 
-    # Resolve Excel A
-    if source_a == "pc":
-        file_a = request.files.get("file_a")
-        if not file_a or file_a.filename == "":
-            return "Excel A file missing", 400
-
-        filename = secure_filename(file_a.filename)
-        excel_a_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        file_a.save(excel_a_path)
-
-    else:  
-        branch = request.form.get("branch_a")
-        path = request.form.get("path_a")
-        url = request.form.get("url_a")
-
-        excel_a_path = GitReader.fetch_excel(
-        branch=branch,
-        path=path,
-        url=url, 
-        target_dir=UPLOAD_FOLDER
-        )
-
-
-    # Resolve Excel B
-    if source_b == "pc":
-        file_b = request.files.get("file_b")
-        if not file_b or file_b.filename == "":
-            return "Excel B file missing", 400
-
-        filename = secure_filename(file_b.filename)
-        excel_b_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        file_b.save(excel_b_path)
-
-    else:  
-        branch = request.form.get("branch_b")
-        path = request.form.get("path_b")
-        url = request.form.get("url_b")
-
-        excel_b_path = GitReader.fetch_excel(
-            branch=branch,
-            path=path,
-            url=url,
-            target_dir=UPLOAD_FOLDER
-        )
-
-
-    # Parse Excel files using your shared classes
-    parser_a = ExcelParser(excel_a_path)
-    parser_b = ExcelParser(excel_b_path)
-    data_a = parser_a.parse()
-    data_b = parser_b.parse()
-
-    # Clean up files immediately to keep server light
-    if os.path.exists(excel_a_path): os.remove(excel_a_path)
-    if os.path.exists(excel_b_path): os.remove(excel_b_path)
-
-    diff_engine = DiffEngine(data_a, data_b)
-    diff_result = diff_engine.compare()
-
-    stats = {"modified": 0, "added": 0, "deleted": 0}
-    for sheet_name, sheet_data in diff_result.items():
-        for row in sheet_data.get('rows', []):
-            statuses = [c['status'] for c in row['cells']]
-            if "modified" in statuses: stats["modified"] += 1
-            elif "added" in statuses: stats["added"] += 1
-            elif "deleted" in statuses: stats["deleted"] += 1
-
-    return render_template(
-        "excel_diff_result.html",
-        diff=diff_result,
-        diff_stats=stats,
-        excel_a_name=os.path.basename(excel_a_path),
-        excel_b_name=os.path.basename(excel_b_path),
-    )
-
-@app.after_request
-def cleanup_temp_files(response):
     try:
-        folder = app.config["UPLOAD_FOLDER"]
-        for filename in os.listdir(folder):
-            file_path = os.path.join(folder, filename)
-            # Only delete files older than 5 minutes to avoid deleting 
-            # files while another user is currently parsing them
-            import time
-            if os.path.isfile(file_path) and time.time() - os.path.getmtime(file_path) > 300:
-                os.remove(file_path)
+        source_a = request.form.get("source_a", "pc")
+        source_b = request.form.get("source_b", "pc")
+
+        # Resolve Excel A
+        if source_a == "pc":
+            file_a = request.files.get("file_a")
+            if not file_a or file_a.filename == "":
+                flash("Excel A file missing", "error")
+                return redirect(url_for('excel_diff'))
+            
+            display_name_a = file_a.filename
+            filename = secure_filename(file_a.filename)
+            excel_a_path = os.path.join(request_folder, f"a_{filename}")
+            file_a.save(excel_a_path)
+        else:  
+            branch_a = request.form.get("branch_a", "N/A")
+            path_a = request.form.get("path_a", "")
+            # NEW: Extract filename and format as [Git: Branch] FileName
+            git_filename_a = os.path.basename(path_a)
+            display_name_a = f"[Git: {branch_a}] {git_filename_a}"
+            
+            excel_a_path = GitReader.fetch_excel(
+                branch=branch_a,
+                path=path_a,
+                url=request.form.get("url_a"), 
+                target_dir=request_folder
+            )
+
+        # Resolve Excel B
+        if source_b == "pc":
+            file_b = request.files.get("file_b")
+            if not file_b or file_b.filename == "":
+                flash("Excel B file missing", "error")
+                return redirect(url_for('excel_diff'))
+            
+            display_name_b = file_b.filename
+            filename = secure_filename(file_b.filename)
+            excel_b_path = os.path.join(request_folder, f"b_{filename}")
+            file_b.save(excel_b_path)
+        else:  
+            branch_b = request.form.get("branch_b", "N/A")
+            path_b = request.form.get("path_b", "")
+            # NEW: Extract filename and format as [Git: Branch] FileName
+            git_filename_b = os.path.basename(path_b)
+            display_name_b = f"[Git: {branch_b}] {git_filename_b}"
+            
+            excel_b_path = GitReader.fetch_excel(
+                branch=branch_b,
+                path=path_b,
+                url=request.form.get("url_b"),
+                target_dir=request_folder
+            )
+
+        # Parse Excel files
+        parser_a = ExcelParser(excel_a_path)
+        parser_b = ExcelParser(excel_b_path)
+        data_a = parser_a.parse()
+        data_b = parser_b.parse()
+
+        # Diff Engine Logic
+        diff_engine = DiffEngine(data_a, data_b)
+        diff_result = diff_engine.compare()
+
+        # Calculate total row-based changes
+        total_row_changes = 0
+        for sheet in diff_result:
+            if sheet.get('data') and 'rows' in sheet['data']:
+                for row in sheet['data']['rows']:
+                    if any(cell.get('status') != 'equal' and (cell.get('a') or cell.get('b')) for cell in row.get('cells', [])):
+                        total_row_changes += 1
+
+        return render_template(
+            "excel_diff_result.html",
+            diff=diff_result,
+            total_diffs=total_row_changes,
+            excel_a_name=display_name_a,
+            excel_b_name=display_name_b,
+        )
+
     except Exception as e:
-        print(f"Error during cleanup: {e}")
-    return response
-    
+        # Hide technical logs from user
+        error_info = traceback.format_exc()
+        app.logger.error(f"DIFF_ERROR: {str(e)}\n{error_info}")
+        
+        if "git" in str(e).lower():
+            friendly_msg = "Could not access the Git repository. Please check your URL, Branch, and Path."
+        elif "permission" in str(e).lower():
+            friendly_msg = "The system could not access the file. It might be open in another program."
+        else:
+            friendly_msg = "An unexpected error occurred during comparison. Please verify your inputs."
+            
+        flash(friendly_msg, "error")
+        return redirect(url_for('excel_diff'))
+
+    finally:
+        # Safer cleanup: Delete the entire request folder at once
+        try:
+            if os.path.exists(request_folder):
+                shutil.rmtree(request_folder)
+        except Exception as e:
+            app.logger.error(f"Cleanup error for {request_folder}: {e}")
+
 if __name__ == "__main__":
     app.run(debug=True)
