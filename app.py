@@ -40,6 +40,10 @@ BASE_UPLOAD_FOLDER = "uploads/temp"
 os.makedirs(BASE_UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = os.path.abspath(BASE_UPLOAD_FOLDER)
 
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return "File is too large! Please upload a file smaller than 16MB.", 413
+
 @app.route("/", methods=["GET", "POST"])
 def excel_diff():
     if request.method == "GET":
