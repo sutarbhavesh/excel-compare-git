@@ -14,6 +14,9 @@ class GitReader:
 
     @staticmethod
     def fetch_excel(branch: str, path: str, target_dir: str, url: Optional[str] = None) -> str:
+        # Define the flag to hide the console window
+        CREATE_NO_WINDOW = 0x08000000 
+
         normalized_path = path.replace("\\", "/")
         filename = f"[Branch: {branch}] {os.path.basename(normalized_path)}"
         save_path = os.path.join(target_dir, filename)
@@ -21,7 +24,12 @@ class GitReader:
         if not url or not url.strip():
             repo_path = os.getcwd()
             cmd = ["git", "show", f"{branch}:{normalized_path}"]
-            process = subprocess.run(cmd, cwd=repo_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            # Added creationflags here
+            process = subprocess.run(
+                cmd, cwd=repo_path, stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, check=True,
+                creationflags=CREATE_NO_WINDOW
+            )
             with open(save_path, "wb") as f:
                 f.write(process.stdout)
             return save_path
@@ -34,10 +42,18 @@ class GitReader:
                 "git", "clone", "--depth", "1", "--filter=blob:none", 
                 "--no-checkout", url, temp_dir
             ]
-            subprocess.run(clone_cmd, check=True, capture_output=True)
+            # Added creationflags here
+            subprocess.run(
+                clone_cmd, check=True, capture_output=True,
+                creationflags=CREATE_NO_WINDOW
+            )
 
             show_cmd = ["git", "show", f"{branch}:{normalized_path}"]
-            show_proc = subprocess.run(show_cmd, cwd=temp_dir, stdout=subprocess.PIPE, check=True)
+            # Added creationflags here
+            show_proc = subprocess.run(
+                show_cmd, cwd=temp_dir, stdout=subprocess.PIPE, 
+                check=True, creationflags=CREATE_NO_WINDOW
+            )
 
             with open(save_path, "wb") as f:
                 f.write(show_proc.stdout)

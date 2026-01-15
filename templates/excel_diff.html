@@ -224,11 +224,13 @@ function validateForm() {
     const sides = ['a', 'b'];
     let isAllValid = true;
 
+    const excelRegex = /\.(xlsx|xls)$/i;
+
     sides.forEach(side => {
         const type = document.getElementById(`source_${side}`).value;
         if (type === 'pc') {
             const fileInput = document.querySelector(`input[name="file_${side}"]`);
-            if (!fileInput.files.length || !fileInput.files[0].name.toLowerCase().endsWith('.xlsx')) {
+            if (!fileInput.files.length || !excelRegex.test(fileInput.files[0].name)) {
                 isAllValid = false;
             }
         } else {
@@ -236,7 +238,7 @@ function validateForm() {
             const path = document.querySelector(`input[name="path_${side}"]`).value.trim();
             const url = document.querySelector(`input[name="url_${side}"]`).value.trim();
             
-            if (!branch || !url || !path || !path.toLowerCase().endsWith('.xlsx')) {
+            if (!branch || !url || !path || !excelRegex.test(path)) {
                 isAllValid = false;
             }
         }
@@ -312,8 +314,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <div class="source-fields a-source active" id="a-pc">
                     <div class="form-group">
-                        <label>Select Workbook (.xlsx)</label>
-                        <input type="file" name="file_a" accept=".xlsx">
+                        <label>Select Workbook (.xlsx, .xls)</label>
+                        <input type="file" name="file_a" accept=".xlsx, .xls">
                     </div>
                 </div>
 
@@ -323,8 +325,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="text" name="branch_a" placeholder="e.g. main">
                     </div>
                     <div class="form-group">
-                        <label>File Path in Repo (.xlsx only) *</label>
-                        <input type="text" name="path_a" placeholder="folder/data.xlsx">
+                        <label>File Path in Repo (.xlsx, .xls only) *</label>
+                        <input type="text" name="path_a" placeholder="folder/data.xlsx, .xls">
                     </div>
                     <div class="form-group">
                         <label>Git URL *</label>
@@ -347,8 +349,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 <div class="source-fields b-source active" id="b-pc">
                     <div class="form-group">
-                        <label>Select Workbook (.xlsx)</label>
-                        <input type="file" name="file_b" accept=".xlsx">
+                        <label>Select Workbook (.xlsx, .xls)</label>
+                        <input type="file" name="file_b" accept=".xlsx, .xls">
                     </div>
                 </div>
 
@@ -358,8 +360,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input type="text" name="branch_b" placeholder="e.g. develop">
                     </div>
                     <div class="form-group">
-                        <label>File Path in Repo (.xlsx only) *</label>
-                        <input type="text" name="path_b" placeholder="folder/data_v2.xlsx">
+                        <label>File Path in Repo (.xlsx, .xls only) *</label>
+                        <input type="text" name="path_b" placeholder="folder/data_v2.xlsx, .xls">
                     </div>
                     <div class="form-group">
                         <label>Git URL *</label>

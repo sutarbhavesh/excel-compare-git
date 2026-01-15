@@ -7,7 +7,6 @@ import uuid
 import shutil 
 from werkzeug.utils import secure_filename
 
-# Importing your internal logic
 from excel_diff.excel_parser import ExcelParser
 from excel_diff.diff_engine import DiffEngine
 from excel_diff.git_reader import GitReader 
@@ -15,9 +14,16 @@ from excel_diff.git_reader import GitReader
 app = Flask(__name__)
 app.secret_key = "super_secret_key_for_flash_messages" 
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if os.path.basename(current_dir).lower() == "internal":
+    PROJECT_ROOT = os.path.dirname(current_dir)
+else:
+    PROJECT_ROOT = current_dir
+
 # --- LOGGING SETUP ---
-LOG_FOLDER = "logs"
+LOG_FOLDER = os.path.join(PROJECT_ROOT, "logs")
 os.makedirs(LOG_FOLDER, exist_ok=True)
+
 log_format = (
     "\n" + "#"*80 + "\n"
     "TIMESTAMP: %(asctime)s\n"
@@ -32,13 +38,13 @@ logging.basicConfig(
     format=log_format
 )
 
-# SECURITY: Limit maximum upload size to 16MB
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
-
-# Base directory for all temporary uploads
-BASE_UPLOAD_FOLDER = "uploads/temp"
+# --- UPLOAD SETUP ---
+BASE_UPLOAD_FOLDER = os.path.join(PROJECT_ROOT, "uploads", "temp")
 os.makedirs(BASE_UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = os.path.abspath(BASE_UPLOAD_FOLDER)
+
+# SECURITY: Limit maximum upload size to 16MB
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 @app.errorhandler(413)
 def request_entity_too_large(error):
@@ -75,7 +81,6 @@ def excel_diff():
         else:  
             branch_a = request.form.get("branch_a", "N/A")
             path_a = request.form.get("path_a", "")
-            # NEW: Extract filename and format as [Git: Branch] FileName
             git_filename_a = os.path.basename(path_a)
             display_name_a = f"[Git: {branch_a}] {git_filename_a}"
             
@@ -100,7 +105,6 @@ def excel_diff():
         else:  
             branch_b = request.form.get("branch_b", "N/A")
             path_b = request.form.get("path_b", "")
-            # NEW: Extract filename and format as [Git: Branch] FileName
             git_filename_b = os.path.basename(path_b)
             display_name_b = f"[Git: {branch_b}] {git_filename_b}"
             
@@ -111,7 +115,7 @@ def excel_diff():
                 target_dir=request_folder
             )
 
-        # Parse Excel files
+        # Parse Excel files (Handles .xls and .xlsx via your updated parser)
         parser_a = ExcelParser(excel_a_path)
         parser_b = ExcelParser(excel_b_path)
         data_a = parser_a.parse()
@@ -138,7 +142,6 @@ def excel_diff():
         )
 
     except Exception as e:
-        # Hide technical logs from user
         error_info = traceback.format_exc()
         app.logger.error(f"DIFF_ERROR: {str(e)}\n{error_info}")
         
@@ -153,9 +156,8 @@ def excel_diff():
         return redirect(url_for('excel_diff'))
 
     finally:
-        # Safer cleanup: Delete the entire request folder at once
         try:
-            if os.path.exists(request_folder):
+            if request_folder and os.path.exists(request_folder):
                 shutil.rmtree(request_folder)
         except Exception as e:
             app.logger.error(f"Cleanup error for {request_folder}: {e}")
