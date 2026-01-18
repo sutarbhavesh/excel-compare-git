@@ -30,12 +30,18 @@ def install_and_launch():
     t.daemon = True
     t.start()
 
-    webview.create_window('Excel Comparison Tool', 'http://127.0.0.1:5000', 
-                          width=1300, height=800)
+    window = webview.create_window(
+        'Excel Comparison Tool', 
+        'http://127.0.0.1:5000', 
+        width=1300, 
+        height=800,
+        text_select=True
+    )
     webview.start()
 
 if __name__ == "__main__":
     try:
+        
         install_and_launch()
     except Exception as e:
         print(f"\n[!] Error: {e}")

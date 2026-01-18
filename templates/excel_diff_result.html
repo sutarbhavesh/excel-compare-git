@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- STABLE VERSION: stableversion_timestamp#1 (2026-01-18) -->
 <meta charset="UTF-8">
 <title>Excel Diff Tool - Results</title>
 <style>
@@ -46,6 +47,52 @@
     .action-link:hover { color: var(--excel-green-dark); }
     
     .status-pill { font-size: 12px; color: #666; background: #eef1f4; padding: 4px 12px; border-radius: 20px; }
+
+    /* Commit History Panel */
+    .commit-panel { 
+        background: white; padding: 15px 20px; border: 1px solid var(--border-color); 
+        border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        display: none;
+    }
+    .commit-panel.show { display: block; }
+    .commit-panel-title { font-weight: 600; color: #333; margin-bottom: 12px; font-size: 13px; }
+    .commit-search { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .commit-input { 
+        padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 4px;
+        font-size: 12px; flex: 1; min-width: 250px;
+    }
+    .commit-list { 
+        max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color);
+        border-radius: 4px; margin-top: 10px; background: #fafafa; display: none;
+    }
+    .commit-list.show { display: block; }
+    .commit-item { 
+        padding: 10px; border-bottom: 1px solid var(--border-color); cursor: pointer;
+        transition: background 0.2s; font-size: 12px; display: flex; gap: 10px; align-items: flex-start;
+    }
+    .commit-item:last-child { border-bottom: none; }
+    .commit-item:hover { background: #f0f2f5; }
+    .commit-item.selected-a { background: #e8f5e9; border-left: 3px solid var(--excel-green); }
+    .commit-item.selected-b { background: #fff3cd; border-left: 3px solid #ffc107; }
+    .commit-checkbox { width: 20px; height: 20px; cursor: pointer; flex-shrink: 0; }
+    .commit-info { flex: 1; }
+    .commit-hash { font-weight: 600; color: var(--excel-green); font-family: monospace; }
+    .commit-meta { font-size: 11px; color: #666; margin-top: 3px; }
+    .commit-btn { 
+        padding: 6px 14px; background: var(--excel-green); color: white;
+        border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500;
+    }
+    .commit-btn:hover { opacity: 0.9; }
+    .commit-btn:disabled { background: #ccc; cursor: not-allowed; }
+    .loading-spinner-a, .loading-spinner-b { display: none; }
+    .loading-spinner-a.active, .loading-spinner-b.active { display: inline-block; }
+    
+    /* Dual Commit Panels Layout */
+    .commit-panels-container { display: flex; gap: 20px; margin-bottom: 15px; }
+    .commit-panel-side { flex: 1; background: white; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; }
+    .commit-panel-side-title { font-weight: 700; color: white; padding: 8px 12px; margin: -15px -15px 12px -15px; border-radius: 8px 8px 0 0; font-size: 13px; }
+    .commit-panel-side-title.side-a { background: var(--excel-green); }
+    .commit-panel-side-title.side-b { background: var(--excel-green); color: white; }
 
     /* Summary Cards */
     .summary-container { display: flex; gap: 20px; margin-bottom: 25px; max-width: 1200px; }
@@ -135,12 +182,618 @@
 
     .master-scroll-container { height: 18px; background: #f9f9f9; overflow-x: auto; border-top: 1px solid var(--border-color); }
     .master-scroll-content { height: 1px; }
+
+    /* Loading Overlay */
+    #loading-overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        backdrop-filter: blur(3px);
+    }
+    .loading-hidden { display: none !important; }
+    .spinner-container { text-align: center; }
+    .excel-spinner {
+        width: 50px; height: 50px;
+        border: 5px solid #e1e1e1;
+        border-top: 5px solid var(--excel-green);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    }
+    .loading-text { font-size: 18px; font-weight: 500; color: #333; margin: 0; }
+    .loading-subtext { font-size: 13px; color: #666; margin-top: 8px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Zoom Controls */
+    .zoom-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #f0f2f5;
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+    }
+    .zoom-btn {
+        padding: 4px 8px;
+        background: white;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        color: #333;
+        transition: all 0.2s;
+    }
+    .zoom-btn:hover {
+        background: var(--excel-green);
+        color: white;
+        border-color: var(--excel-green);
+    }
+    .zoom-display {
+        font-size: 12px;
+        color: #666;
+        font-weight: 600;
+        min-width: 50px;
+        text-align: center;
+    }
 </style>
 
 <script>
+    let currentZoom = 100;
+
+    function setZoom(level) {
+        currentZoom = Math.max(50, Math.min(200, level));
+        document.body.style.zoom = currentZoom + '%';
+        document.getElementById('zoom-level').textContent = currentZoom + '%';
+        // Only save zoom for same-page operations, not for navigation
+        if (!window.isNavigating) {
+            localStorage.setItem('pageZoom', currentZoom);
+        }
+    }
+
+    function zoomIn() {
+        setZoom(currentZoom + 10);
+    }
+
+    function zoomOut() {
+        setZoom(currentZoom - 10);
+    }
+
+    function resetZoom() {
+        setZoom(100);
+    }
+
+    // Restore zoom on page load only if it's the same page (for pywebview)
+    window.addEventListener('load', function() {
+        // Check if this is a result page (has comparison data)
+        const hasComparison = document.querySelector('.stat-card') !== null;
+        if (hasComparison) {
+            // For result pages, check if zoom was saved in this session
+            const saved = localStorage.getItem('pageZoom');
+            if (saved && !window.location.href.includes('/view-result/') && !window.location.href.includes('/compare-commits')) {
+                setZoom(parseInt(saved));
+            }
+        }
+    });
+
+    // Reset zoom for navigation to new pages
+    window.addEventListener('beforeunload', function() {
+        window.isNavigating = true;
+        localStorage.removeItem('pageZoom');
+    });
+
+    // Keyboard shortcuts: Ctrl+Plus/Minus
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === '+' || e.key === '=') {
+                e.preventDefault();
+                zoomIn();
+            } else if (e.key === '-') {
+                e.preventDefault();
+                zoomOut();
+            } else if (e.key === '0') {
+                e.preventDefault();
+                resetZoom();
+            }
+        }
+    });
+
+    function toggleComparePanel() {
+        const panel = document.getElementById('commit-panel');
+        const isHidden = panel.style.display === 'none';
+        
+        if (isHidden) {
+            panel.style.display = 'block';
+            panel.scrollIntoView({behavior:'smooth'});
+        } else {
+            panel.style.display = 'none';
+        }
+    }
+
     function getColLetter(n) {
         let s = ""; while (n > 0) { let m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s;
     }
+
+    let commitDataA = { branch: null, path: null, url: null, commits: [], commitHash: null, uploadFile: null, uploadFileName: null, mode: 'git' };
+    let commitDataB = { branch: null, path: null, url: null, commits: [], commitHash: null, uploadFile: null, uploadFileName: null, mode: 'git' };
+    let syncHorizontalEnabled = true;
+
+    function initCommitHistory() {
+        // Initialize with metadata from template
+        {% if commit_metadata %}
+            // Helper function to safely get non-empty values
+            function getMetadataValue(val) {
+                if (!val || val === 'None' || (typeof val === 'string' && !val.trim())) return null;
+                return val;
+            }
+            
+            // File A metadata
+            const branchA = getMetadataValue("{{ commit_metadata.branch_a }}");
+            const pathA = getMetadataValue("{{ commit_metadata.path_a }}");
+            const urlA = getMetadataValue("{{ commit_metadata.url_a }}");
+            
+            commitDataA.branch = branchA;
+            commitDataA.path = pathA;
+            commitDataA.url = urlA;
+            
+            if (branchA) document.getElementById('branch-input-a').value = branchA;
+            if (pathA) document.getElementById('path-input-a').value = pathA;
+            if (urlA) document.getElementById('url-input-a').value = urlA;
+            
+            // File B metadata
+            const branchB = getMetadataValue("{{ commit_metadata.branch_b }}");
+            const pathB = getMetadataValue("{{ commit_metadata.path_b }}");
+            const urlB = getMetadataValue("{{ commit_metadata.url_b }}");
+            
+            commitDataB.branch = branchB;
+            commitDataB.path = pathB;
+            commitDataB.url = urlB;
+            
+            if (branchB) document.getElementById('branch-input-b').value = branchB;
+            if (pathB) document.getElementById('path-input-b').value = pathB;
+            if (urlB) document.getElementById('url-input-b').value = urlB;
+        {% endif %}
+        // initialize syncHorizontal setting from localStorage
+        try {
+            const stored = localStorage.getItem('syncHorizontalEnabled');
+            if (stored !== null) syncHorizontalEnabled = stored === 'true';
+        } catch (e) {
+            syncHorizontalEnabled = true;
+        }
+        const cb = document.getElementById('sync-h-checkbox');
+        if (cb) cb.checked = !!syncHorizontalEnabled;
+        
+        console.log('[INFO] Commit history initialized');
+    }
+
+    function toggleSync(el) {
+        syncHorizontalEnabled = !!el.checked;
+        try { localStorage.setItem('syncHorizontalEnabled', syncHorizontalEnabled ? 'true' : 'false'); } catch (e) {}
+    }
+
+    function loadCommitHistory(side) {
+        const commitData = side === 'a' ? commitDataA : commitDataB;
+        
+        if (!commitData.branch || !commitData.path) {
+            alert("Please provide branch and path information to load commit history.");
+            return;
+        }
+        
+        const spinner = document.querySelector(`.loading-spinner-${side}`);
+        const commitList = document.querySelector(`.commit-list-${side}`);
+        spinner.classList.add('active');
+        commitList.classList.add('show');
+        commitList.innerHTML = '<div style="padding:10px; text-align:center; color:#999;">Loading commits...</div>';
+        
+        fetch('/api/commit-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                branch: commitData.branch,
+                path: commitData.path,
+                url: commitData.url,
+                limit: 30
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            spinner.classList.remove('active');
+            if (data.error) {
+                console.error('Failed to load commits:', data.error);
+                commitList.innerHTML = `<div style="padding:10px; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px;">
+                    <strong>Error:</strong> ${data.error}<br/>
+                    <small>${data.details || ''}</small>
+                </div>`;
+                return;
+            }
+            if (data.warning) {
+                commitList.innerHTML = `<div style="padding:10px; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:4px;">
+                    ${data.warning}
+                </div>`;
+            }
+            commitData.commits = data.commits;
+            renderCommitList(side);
+        })
+        .catch(e => {
+            console.error('Fetch error:', e.message);
+            spinner.classList.remove('active');
+            commitList.innerHTML = `<div style="padding:10px; color:red;">Error: ${e.message}</div>`;
+        });
+    }
+
+    function filterCommits(side) {
+        const commitData = side === 'a' ? commitDataA : commitDataB;
+        const searchInput = document.getElementById(`search-input-${side}`).value.toLowerCase();
+        const commitItems = document.querySelectorAll(`.commit-list-${side} .commit-item`);
+        
+        commitItems.forEach(item => {
+            const hash = item.getAttribute('data-hash');
+            const author = item.getAttribute('data-author');
+            const message = item.getAttribute('data-message');
+            const visible = hash.includes(searchInput) || author.includes(searchInput) || message.includes(searchInput);
+            item.style.display = visible ? 'flex' : 'none';
+        });
+    }
+
+    function renderCommitList(side) {
+        const commitData = side === 'a' ? commitDataA : commitDataB;
+        const commitList = document.querySelector(`.commit-list-${side}`);
+        
+        if (commitData.commits.length === 0) {
+            commitList.innerHTML = `<div style="padding:10px; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:4px;">
+                <strong>No commits found</strong><br/>
+                <small>Check that:<br/>
+                • Branch name is correct (e.g., "main", "master", "develop")<br/>
+                • File path is relative to repo root (e.g., "test_files/test_files_2/file.xlsx")<br/>
+                • File has been committed to this branch</small>
+            </div>`;
+            return;
+        }
+        
+        // Display all loaded commits with single click selection
+        commitList.innerHTML = commitData.commits.map((c, idx) => `
+            <div class="commit-item" id="commit-${side}-${idx}" data-hash="${c.hash}" data-author="${c.author.toLowerCase()}" data-message="${c.message.toLowerCase()}" onclick="selectCommit('${side}', '${c.full_hash}', ${idx})" style="cursor:pointer;">
+                <div class="commit-info">
+                    <div class="commit-hash">${c.hash}</div>
+                    <div class="commit-meta">${c.author} - ${new Date(c.date).toLocaleDateString()}</div>
+                    <div class="commit-meta" style="font-style:italic;">${c.message}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function selectCommit(side, fullHash, idx) {
+        const commitData = side === 'a' ? commitDataA : commitDataB;
+        commitData.commitHash = fullHash;
+        
+        // Clear previous selection for this side
+        document.querySelectorAll(`.commit-list-${side} .commit-item`).forEach(e => e.classList.remove('selected-a', 'selected-b'));
+        
+        // Mark new selection with appropriate color
+        const selectClass = side === 'a' ? 'selected-a' : 'selected-b';
+        const elem = document.getElementById(`commit-${side}-${idx}`);
+        if (elem) elem.classList.add(selectClass);
+        
+        // Enable compare button if both commits are selected
+        updateCompareButtonState();
+    }
+
+    function updateCompareButtonState() {
+        const btn = document.getElementById('compare-commit-btn');
+        if (btn) {
+            // Check if both sides have something selected
+            const sideAHasSelection = commitDataA.commitHash || commitDataA.uploadFile;
+            const sideBHasSelection = commitDataB.commitHash || commitDataB.uploadFile;
+            
+            // Both sides must have selections, and if both are commits, they must be different
+            const bothCommits = commitDataA.commitHash && commitDataB.commitHash;
+            const areDifferent = !bothCommits || commitDataA.commitHash !== commitDataB.commitHash;
+            
+            btn.disabled = !(sideAHasSelection && sideBHasSelection && areDifferent);
+        }
+    }
+
+    // Toggle between Git and Upload modes for each panel
+    function switchMode(side, mode) {
+        // Update mode indicator
+        document.querySelectorAll(`.mode-btn-${side}`).forEach(b => b.classList.remove('active'));
+        document.getElementById(`mode-btn-${side}-${mode}`).classList.add('active');
+
+        // Show/hide sections
+        document.getElementById(`git-section-${side}`).style.display = mode === 'git' ? 'block' : 'none';
+        document.getElementById(`upload-section-${side}`).style.display = mode === 'upload' ? 'block' : 'none';
+
+        // Reset selections when switching modes
+        const commitData = side === 'a' ? commitDataA : commitDataB;
+        commitData.commitHash = null;
+        commitData.uploadFile = null;
+        commitData.uploadFileName = null;
+        commitData.commits = [];
+        
+        // Clear upload file display
+        const fileInput = document.getElementById(`upload-file-${side}`);
+        if (fileInput) fileInput.value = '';
+        const fileDisplay = document.getElementById(`file-name-${side}`);
+        if (fileDisplay) fileDisplay.textContent = '';
+        
+        // Clear commit selections
+        document.querySelectorAll(`.commit-list-${side} .commit-item`).forEach(e => e.classList.remove('selected-a', 'selected-b'));
+        
+        // Clear any displayed comparison results
+        const commitSection = document.getElementById('commit-comparison');
+        if (commitSection) {
+            commitSection.remove();
+        }
+        
+        updateCompareButtonState();
+    }
+
+    // Handle file upload for each side
+    function handleFileUpload(side) {
+        const fileInput = document.getElementById(`upload-file-${side}`);
+        if (fileInput && fileInput.files.length > 0) {
+            const commitData = side === 'a' ? commitDataA : commitDataB;
+            commitData.uploadFile = fileInput.files[0];
+            commitData.uploadFileName = fileInput.files[0].name;
+            document.getElementById(`file-name-${side}`).textContent = commitData.uploadFileName;
+            updateCompareButtonState();
+        }
+    }
+
+    function compareWithCommit() {
+        // Validate that both sides have selections
+        const sideAEmpty = !commitDataA.commitHash && !commitDataA.uploadFile;
+        const sideBEmpty = !commitDataB.commitHash && !commitDataB.uploadFile;
+
+        if (sideAEmpty || sideBEmpty) {
+            alert("Please select a file or commit on both left and right panels");
+            return;
+        }
+
+        // Check they're different
+        const bothCommits = commitDataA.commitHash && commitDataB.commitHash;
+        if (bothCommits && commitDataA.commitHash === commitDataB.commitHash) {
+            alert("Please select two DIFFERENT commits");
+            return;
+        }
+
+        // If both are local uploads, submit via normal form POST to main page
+        if (commitDataA.uploadFile && commitDataB.uploadFile) {
+            const btn = document.getElementById('compare-commit-btn');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ Comparing...';
+            
+            const overlay = document.getElementById('loading-overlay');
+            overlay.classList.remove('loading-hidden');
+
+            // Use FormData to submit files
+            const formData = new FormData();
+            formData.append('file_a', commitDataA.uploadFile);
+            formData.append('file_b', commitDataB.uploadFile);
+
+            fetch('/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.text())
+            .then(html => {
+                // Replace entire page with result
+                document.documentElement.innerHTML = html;
+            })
+            .catch(e => {
+                console.error('Local comparison failed:', e.message);
+                btn.disabled = false;
+                btn.textContent = origText;
+                overlay.classList.add('loading-hidden');
+                alert('Error: ' + e.message);
+            });
+            return;
+        }
+
+        // If one or both are commits, use commit API
+        if (commitDataA.commitHash && commitDataB.commitHash) {
+            // Both are commits - clear old comparison results before navigation
+            const oldComparison = document.getElementById('commit-comparison');
+            if (oldComparison) {
+                oldComparison.remove();
+            }
+            
+            const overlay = document.getElementById('loading-overlay');
+            overlay.classList.remove('loading-hidden');
+            
+            const params = new URLSearchParams({
+                commit_a: commitDataA.commitHash,
+                commit_b: commitDataB.commitHash,
+                branch: commitDataA.branch || '',
+                path: commitDataA.path || '',
+                url: commitDataA.url || '',
+                branch_b: commitDataB.branch || '',
+                path_b: commitDataB.path || '',
+                url_b: commitDataB.url || ''
+            });
+            window.location.href = '/compare-commits?' + params.toString();
+            return;
+        }
+
+        // Mixed: commit + local file
+        const isACommit = !!commitDataA.commitHash;
+        const file = isACommit ? commitDataB.uploadFile : commitDataA.uploadFile;
+        const hash = isACommit ? commitDataA.commitHash : commitDataB.commitHash;
+        const branch = isACommit ? commitDataA.branch : commitDataB.branch;
+        const path = isACommit ? commitDataA.path : commitDataB.path;
+        const url = isACommit ? commitDataA.url : commitDataB.url;
+
+        const formData = new FormData();
+        formData.append('hash', hash);
+        formData.append('branch', branch);
+        formData.append('path', path);
+        formData.append('url', url || '');
+        formData.append('local_file', file);
+        formData.append('hash_side', isACommit ? 'a' : 'b');
+        // Pass File B metadata when available
+        if (commitDataB.branch) formData.append('branch_b', commitDataB.branch);
+        if (commitDataB.path) formData.append('path_b', commitDataB.path);
+        if (commitDataB.url) formData.append('url_b', commitDataB.url);
+        if (commitDataB.uploadFileName) formData.append('upload_file_b_name', commitDataB.uploadFileName);
+
+        const btn = document.getElementById('compare-commit-btn');
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Comparing...';
+        
+        const overlay = document.getElementById('loading-overlay');
+        overlay.classList.remove('loading-hidden');
+
+        fetch('/api/compare-commit-local-unified', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+            btn.disabled = false;
+            btn.textContent = origText;
+            overlay.classList.add('loading-hidden');
+            if (data.error) {
+                console.error('Comparison error:', data.error);
+                alert('Error: ' + data.error);
+                return;
+            }
+            // Navigate to result in pywebview
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+            }
+        })
+        .catch(e => {
+            console.error('Comparison failed:', e.message);
+            btn.disabled = false;
+            btn.textContent = origText;
+            overlay.classList.add('loading-hidden');
+            alert('Error: ' + e.message);
+        });
+    }
+
+    function displayCommitComparison(data) {
+        // Remove any existing comparison section to ensure fresh display
+        let existingSection = document.getElementById('commit-comparison');
+        if (existingSection) {
+            existingSection.remove();
+        }
+        
+        // Create new comparison section
+        let commitSection = document.createElement('div');
+        commitSection.id = 'commit-comparison';
+        commitSection.style.marginTop = '30px';
+        
+        // Insert after the summary container
+        const summaryContainer = document.querySelector('.summary-container');
+        if (summaryContainer) {
+            summaryContainer.parentNode.insertBefore(commitSection, summaryContainer.nextSibling);
+        } else {
+            document.body.appendChild(commitSection);
+        }
+        
+        // Render the full comparison like the original
+        let html = `<div style="background:white; padding:20px; border: 2px solid var(--excel-green); border-radius:8px; margin-bottom:30px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="color:var(--excel-green); margin:0;">📊 Commit Comparison: ${data.commit_info.hash_a} ← → ${data.commit_info.hash_b}</h3>
+                <button onclick="document.getElementById('commit-comparison').remove();" style="background:#f0f2f5; border:1px solid #d1d4d8; border-radius:4px; padding:6px 12px; cursor:pointer; font-size:12px;">Close</button>
+            </div>
+            <div style="font-size:12px; color:#666; margin-bottom:15px;">
+                Total changes found: <strong style="color:#d32f2f;">${data.total_diffs}</strong>
+            </div>`;
+        
+        // Add sheets with full comparison tables
+        data.diff.forEach((sheet, sheetIdx) => {
+            let sheetChanges = 0;
+            if (sheet.data) {
+                sheet.data.rows.forEach(row => {
+                    row.cells.forEach(cell => {
+                        if (cell.status !== 'equal' && (cell.a || cell.b)) {
+                            sheetChanges++;
+                            return;
+                        }
+                    });
+                });
+            }
+            
+            html += `<div class="sheet" style="margin-bottom:15px;">
+                <div class="sheet-header" onclick="toggleSheet(this)" style="cursor:pointer;">
+                    <div>
+                        <span>📋 ${sheet.name_a || 'MISSING'} ↔ ${sheet.name_b || 'MISSING'}</span>
+                        ${!sheet.is_match ? '<span class="diff-badge badge-black">⚠️ SHEET NAME MISMATCH</span>' : ''}
+                        ${sheetChanges > 0 ? '<span class="diff-badge">' + sheetChanges + ' changes</span>' : ''}
+                    </div>
+                </div>
+                <div class="sheet-body">
+                    <div style="display: flex; justify-content: flex-end; padding: 10px;">
+                        <label style="background: var(--excel-green); color:white; padding: 5px 12px; border-radius: 20px; font-size: 12px; cursor: pointer;">
+                            <input type="checkbox" onchange="toggleDiffs(this)" style="cursor:pointer;"> Show Changes Only
+                        </label>
+                    </div>
+                    <div class="compare-wrapper">
+                        <div class="file-pane">
+                            <div class="file-title">📁 Commit: ${data.commit_info.hash_a}</div>
+                            <div class="file-scroll" onscroll="syncVertical(this)">
+                                <table class="excel-table">
+                                    <tr class="col-header">
+                                        <td class="embedded-idx">#</td>
+                                        ${sheet.data ? Array.from({length: sheet.data.max_cols}).map((_, i) => {
+                                            let col = String.fromCharCode(65 + (i % 26));
+                                            if (i >= 26) col = String.fromCharCode(65 + Math.floor(i / 26) - 1) + col;
+                                            return `<td>${col}</td>`;
+                                        }).join('') : ''}
+                                    </tr>
+                                    ${sheet.data ? sheet.data.rows.map(row => `
+                                        <tr data-row-idx="${row.row_index}">
+                                            <td class="embedded-idx">${row.row_index}</td>
+                                            ${row.cells.map(cell => `<td class="${cell.status}">${cell.a !== null ? cell.a : ''}</td>`).join('')}
+                                        </tr>
+                                    `).join('') : ''}
+                                </table>
+                            </div>
+                        </div>
+                        <div class="file-pane">
+                            <div class="file-title">📁 Commit: ${data.commit_info.hash_b}</div>
+                            <div class="file-scroll" onscroll="syncVertical(this)">
+                                <table class="excel-table">
+                                    <tr class="col-header">
+                                        <td class="embedded-idx">#</td>
+                                        ${sheet.data ? Array.from({length: sheet.data.max_cols}).map((_, i) => {
+                                            let col = String.fromCharCode(65 + (i % 26));
+                                            if (i >= 26) col = String.fromCharCode(65 + Math.floor(i / 26) - 1) + col;
+                                            return `<td>${col}</td>`;
+                                        }).join('') : ''}
+                                    </tr>
+                                    ${sheet.data ? sheet.data.rows.map(row => `
+                                        <tr data-row-idx="${row.row_index}">
+                                            <td class="embedded-idx">${row.row_index}</td>
+                                            ${row.cells.map(cell => `<td class="${cell.status}">${cell.b !== null ? cell.b : ''}</td>`).join('')}
+                                        </tr>
+                                    `).join('') : ''}
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="master-scroll-container" onscroll="syncHorizontal(this)">
+                        <div class="master-scroll-content"></div>
+                    </div>
+                </div>
+            </div>`;
+        });
+        
+        html += '</div>';
+        commitSection.innerHTML = html;
+        commitSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    document.addEventListener('DOMContentLoaded', initCommitHistory);
 
     function syncVertical(el) {
         const body = el.closest('.sheet-body');
@@ -151,9 +804,10 @@
     }
 
     function syncHorizontal(masterEl) {
+        if (!syncHorizontalEnabled) return; // allow independent scrolling when disabled
         const body = masterEl.closest('.sheet-body');
         const panes = body.querySelectorAll('.file-scroll');
-        const scrollRatio = masterEl.scrollLeft / (masterEl.scrollWidth - masterEl.clientWidth);
+        const scrollRatio = masterEl.scrollLeft / (masterEl.scrollWidth - masterEl.clientWidth || 1);
         panes.forEach(p => {
             const maxScroll = p.scrollWidth - p.clientWidth;
             p.scrollLeft = scrollRatio * maxScroll;
@@ -209,19 +863,129 @@
 </head>
 <body>
 
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="loading-hidden">
+    <div class="spinner-container">
+        <div class="excel-spinner"></div>
+        <p class="loading-text">Performing comparison...</p>
+        <p class="loading-subtext">Fetching data and analyzing sheets. Please wait.</p>
+    </div>
+</div>
+
 <div class="main-title">Excel Comparison Result</div>
 <br>
 <div class="nav-container">
     <div class="nav-left">
         <a href="/" class="nav-btn">Compare New Files</a>
+        <button class="nav-btn" onclick="toggleComparePanel();" style="background: var(--excel-green);">➕ Compare commits</button>
     </div>
     <div class="nav-right">
+        <div class="zoom-controls">
+            <button class="zoom-btn" onclick="zoomOut()" title="Zoom Out (Ctrl+-)">−</button>
+            <span class="zoom-display"><span id="zoom-level">100%</span></span>
+            <button class="zoom-btn" onclick="zoomIn()" title="Zoom In (Ctrl++)">+</button>
+            <button class="zoom-btn" onclick="resetZoom()" title="Reset (Ctrl+0)">↻</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-left: 15px; padding: 8px 12px; background: #f9f9f9; border-radius: 4px; border: 1px solid var(--border-color); font-size: 12px;">
+            <span style="color: #666;"><strong>Comparing:</strong></span>
+            <span id="file-a-display" style="color: var(--excel-green); font-weight: 600;">{{ excel_a_name }}</span>
+            <span style="color: #ccc;">↔</span>
+            <span id="file-b-display" style="color: var(--excel-green); font-weight: 600;">{{ excel_b_name }}</span>
+        </div>
         <span class="action-link" onclick="globalToggle('expand')">Expand All</span>
         <span style="color: #ccc;">|</span>
         <span class="action-link" onclick="globalToggle('collapse')">Collapse All</span>
+        <span style="color: #ccc;">|</span>
+        <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="sync-h-checkbox" checked onchange="toggleSync(this)" /> Sync Horizontal
+        </label>
         <span class="status-pill">Last Updated: <span id="timestamp"></span></span>
     </div>
     <script>document.getElementById('timestamp').innerText = new Date().toLocaleTimeString();</script>
+</div>
+
+<!-- Dual Commit History Panels with Git/Upload Toggle -->
+<div class="commit-panel" id="commit-panel">
+    <div class="commit-panel-title">🔍 Compare Files - Choose Git or Upload for Each Side</div>
+    
+    <div class="commit-panels-container">
+        <!-- LEFT PANEL: Option A -->
+        <div class="commit-panel-side">
+            <div class="commit-panel-side-title side-a">📝 File A</div>
+            
+            <!-- Mode Toggle Buttons -->
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <button class="mode-btn-a mode-btn-a-git active" id="mode-btn-a-git" onclick="switchMode('a', 'git')" style="flex:1; padding:8px; background:var(--excel-green); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:600; font-size:12px;">📂 Git</button>
+                <button class="mode-btn-a mode-btn-a-upload" id="mode-btn-a-upload" onclick="switchMode('a', 'upload')" style="flex:1; padding:8px; background:#f0f2f5; color:#333; border:1px solid var(--border-color); border-radius:4px; cursor:pointer; font-weight:600; font-size:12px;">📤 Upload</button>
+            </div>
+            
+            <!-- Git Section (default visible) -->
+            <div id="git-section-a" style="display:block;">
+                <div class="commit-search" style="flex-direction: column; gap: 8px;">
+                    <input type="text" class="commit-input" placeholder="Branch (e.g., main)" id="branch-input-a" style="width: 100%;">
+                    <input type="text" class="commit-input" placeholder="File Path (e.g., data/file.xlsx)" id="path-input-a" style="width: 100%;">
+                    <input type="text" class="commit-input" placeholder="Repo URL (optional)" id="url-input-a" style="width: 100%;">
+                    <button class="commit-btn" onclick="commitDataA.branch = document.getElementById('branch-input-a').value; commitDataA.path = document.getElementById('path-input-a').value; commitDataA.url = document.getElementById('url-input-a').value; loadCommitHistory('a');" style="width: 100%;">Load History</button>
+                    <span class="loading-spinner-a">⏳ Loading...</span>
+                </div>
+                <input type="text" class="commit-input" id="search-input-a" placeholder="🔍 Filter commits..." style="width: 100%; margin-top: 8px;" oninput="filterCommits('a')">
+                <div class="commit-list commit-list-a" style="margin-top:10px;"></div>
+            </div>
+            
+            <!-- Upload Section (hidden by default) -->
+            <div id="upload-section-a" style="display:none;">
+                <div style="margin-bottom: 12px;">
+                    <label style="font-weight:600; color:#444; font-size:12px; display:block; margin-bottom:6px;">Select Excel File (.xlsx, .xls)</label>
+                    <input type="file" id="upload-file-a" accept=".xlsx, .xls" onchange="handleFileUpload('a')" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; font-size:11px;">
+                    <div id="file-name-a" style="margin-top:6px; font-size:11px; color:#666;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- RIGHT PANEL: Option B -->
+        <div class="commit-panel-side">
+            <div class="commit-panel-side-title side-b">📝 File B</div>
+            
+            <!-- Mode Toggle Buttons -->
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <button class="mode-btn-b mode-btn-b-git active" id="mode-btn-b-git" onclick="switchMode('b', 'git')" style="flex:1; padding:8px; background:var(--excel-green); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:600; font-size:12px;">📂 Git</button>
+                <button class="mode-btn-b mode-btn-b-upload" id="mode-btn-b-upload" onclick="switchMode('b', 'upload')" style="flex:1; padding:8px; background:#f0f2f5; color:#333; border:1px solid var(--border-color); border-radius:4px; cursor:pointer; font-weight:600; font-size:12px;">📤 Upload</button>
+            </div>
+            
+            <!-- Git Section (default visible) -->
+            <div id="git-section-b" style="display:block;">
+                <div class="commit-search" style="flex-direction: column; gap: 8px;">
+                    <input type="text" class="commit-input" placeholder="Branch (e.g., develop)" id="branch-input-b" style="width: 100%;">
+                    <input type="text" class="commit-input" placeholder="File Path (e.g., data/file.xlsx)" id="path-input-b" style="width: 100%;">
+                    <input type="text" class="commit-input" placeholder="Repo URL (optional)" id="url-input-b" style="width: 100%;">
+                    <button class="commit-btn" onclick="commitDataB.branch = document.getElementById('branch-input-b').value; commitDataB.path = document.getElementById('path-input-b').value; commitDataB.url = document.getElementById('url-input-b').value; loadCommitHistory('b');" style="width: 100%;">Load History</button>
+                    <span class="loading-spinner-b">⏳ Loading...</span>
+                </div>
+                <input type="text" class="commit-input" id="search-input-b" placeholder="🔍 Filter commits..." style="width: 100%; margin-top: 8px;" oninput="filterCommits('b')">
+                <div class="commit-list commit-list-b" style="margin-top:10px;"></div>
+            </div>
+            
+            <!-- Upload Section (hidden by default) -->
+            <div id="upload-section-b" style="display:none;">
+                <div style="margin-bottom: 12px;">
+                    <label style="font-weight:600; color:#444; font-size:12px; display:block; margin-bottom:6px;">Select Excel File (.xlsx, .xls)</label>
+                    <input type="file" id="upload-file-b" accept=".xlsx, .xls" onchange="handleFileUpload('b')" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px; font-size:11px;">
+                    <div id="file-name-b" style="margin-top:6px; font-size:11px; color:#666;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div style="font-size:12px; color:#666; margin:15px 0; padding:10px; background:#f0f2f5; border-radius:4px;">
+        <strong>How to compare:</strong><br/>
+        • Choose <strong>Git</strong> to compare from Git repo, or <strong>Upload</strong> to select local file<br/>
+        • For Git: Enter branch/path, click "Load History", then click a commit<br/>
+        • For Upload: Click the file input and select your Excel file<br/>
+        • Combine any way: Git vs Git, Upload vs Upload, or Git vs Upload<br/>
+        • Click "Compare Files" when ready
+    </div>
+    
+    <button class="commit-btn" id="compare-commit-btn" onclick="compareWithCommit()" style="width: 100%; padding: 10px; font-size: 14px;" disabled>▶ Compare Files</button>
 </div>
 
 <div class="summary-container">
